@@ -206,15 +206,133 @@ input[type="text"]:focus {
   min-width: 0;
 }
 
-.content > .panel.skill-table-panel {
-  flex: 0 1 auto;
-  max-height: 45%;
-  min-height: 180px;
+/* Vertical split: table on top, detail below, drag-handle in between. */
+.split-vertical {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-.content > .panel.skill-detail-panel {
+.split-top {
+  flex: 0 0 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.split-top > .panel {
   flex: 1 1 auto;
-  min-height: 280px;
+  min-height: 0;
+}
+
+.split-bottom {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.split-bottom > .panel {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.split-handle {
+  height: 8px;
+  margin: 2px 0;
+  cursor: row-resize;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  border-radius: 4px;
+  transition: background 0.12s;
+}
+
+.split-handle:hover,
+.split-dragging .split-handle {
+  background: var(--accent-soft);
+}
+
+.split-handle-grip {
+  width: 56px;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--panel-border);
+}
+
+.split-handle:hover .split-handle-grip,
+.split-dragging .split-handle-grip {
+  background: var(--accent);
+}
+
+.split-dragging {
+  cursor: row-resize;
+}
+
+/* Horizontal split inside the detail panel: info | handle | actions. */
+.detail-split {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.detail-split.split-dragging {
+  cursor: col-resize;
+}
+
+.detail-split-left {
+  flex: 0 0 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.detail-split-right {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-left: 1px solid var(--panel-border);
+  /* Enables @container queries on descendants so the action grid can adapt
+     to pane width, independent of the viewport. */
+  container-type: inline-size;
+  container-name: detail-right;
+}
+
+.split-handle-col {
+  width: 8px;
+  height: auto;
+  margin: 0;
+  cursor: col-resize;
+  flex: 0 0 auto;
+  align-self: stretch;
+}
+
+.split-handle-col .split-handle-grip {
+  width: 3px;
+  height: 56px;
+  border-radius: 3px;
+}
+
+.detail-info-body,
+.detail-actions-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.detail-actions-body {
+  /* Slightly tighter padding on the right pane — it's just buttons. */
+  padding: 12px;
 }
 
 @media (max-width: 960px) {
@@ -246,6 +364,18 @@ input[type="text"]:focus {
   font-weight: 600;
   color: var(--text);
   background: #fafbfc;
+}
+
+.panel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.panel-header-actions .reset-widths {
+  font-size: 11.5px;
+  padding: 3px 8px;
+  color: var(--text-muted);
 }
 
 .panel-body {
@@ -312,8 +442,17 @@ input[type="text"]:focus {
 .badge.warn { background: var(--orange-bg); color: var(--orange); }
 .badge.bad { background: var(--red-bg); color: var(--red); }
 
+.skill-table-scroll {
+  overflow: auto;
+  height: 100%;
+  min-height: 0;
+}
+
+.skill-table-scroll.col-resizing {
+  cursor: col-resize;
+}
+
 .skill-table {
-  width: 100%;
   border-collapse: separate;
   border-spacing: 0;
   font-size: 12.5px;
@@ -321,10 +460,69 @@ input[type="text"]:focus {
 
 .skill-table th,
 .skill-table td {
-  padding: 7px 12px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--panel-border);
   text-align: left;
-  vertical-align: middle;
+  /* Top-align so single-line and two-line cells in the same row sit on the
+     same visual baseline. Middle-align looks fine until one cell wraps,
+     then it makes neighbors feel off. */
+  vertical-align: top;
+  /* td must stay `display: table-cell` to keep row flow intact. All clamping
+     happens on the inner `.clamp` wrapper — never on the td itself. */
+  overflow: hidden;
+}
+
+.skill-table td {
+  white-space: normal;
+}
+
+/* Two-line clamp lives on an inner div so we don't break table layout.
+   Works in any Chromium-based engine (Wails uses WebView2 → Chromium). */
+.skill-table .clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  /* Allow arbitrary breakpoints so very long paths and URLs can wrap. */
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.4;
+  /* Cap at two lines of rendered height — guarantees uniform row height
+     regardless of whether content wrapped. */
+  max-height: calc(1.4em * 2);
+}
+
+/* Single-line clamp (for the Name cell — badges + short name). */
+.skill-table .clamp-1 {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Path column: monospace + two-line clamp, same mechanic. */
+.skill-table td.path .clamp-2 {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+/* Name column: name + optional frozen/hidden pills on one row. The name
+   itself clamps; the pills stay at a fixed size to the right. */
+.skill-table .name-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.skill-table .name-cell > .clamp-1 {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.skill-table .name-cell > .badge {
+  flex: 0 0 auto;
 }
 
 .skill-table th {
@@ -335,6 +533,56 @@ input[type="text"]:focus {
   font-weight: 600;
   color: var(--text-muted);
   letter-spacing: 0.02em;
+  white-space: nowrap;
+  /* Keep room for the resizer on the right edge. */
+  padding-right: 16px;
+}
+
+/* Cells that hold a single badge (origin/valid/claude/codex) should stay on
+   one line — wrapping a 3-character status pill looks bad. */
+.skill-table td.cell-badge {
+  white-space: nowrap;
+}
+
+.skill-table th .th-label {
+  display: inline-block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+  max-width: 100%;
+}
+
+.skill-table th .col-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  user-select: none;
+  touch-action: none;
+}
+
+.skill-table th .col-resizer::after {
+  content: "";
+  position: absolute;
+  top: 20%;
+  bottom: 20%;
+  right: 3px;
+  width: 2px;
+  border-radius: 2px;
+  background: transparent;
+  transition: background 0.12s;
+}
+
+.skill-table th:hover .col-resizer::after,
+.skill-table th .col-resizer:hover::after {
+  background: var(--panel-border);
+}
+
+.skill-table th .col-resizer:hover::after {
+  background: var(--accent);
 }
 
 .skill-table tr {
@@ -353,35 +601,114 @@ input[type="text"]:focus {
   background: #dbe8f8;
 }
 
-.skill-table td.path {
-  font-family: var(--mono);
-  color: var(--text-muted);
-  font-size: 11.5px;
-  max-width: 240px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
+/* Action panel: sits in the right pane of the detail split. Grouped into
+   sections, each with a small uppercase header and compact buttons laid out
+   in 2-column rows where the two actions are siblings (Claude + Codex) and
+   a full-width follow-up button for the combined case. */
 .action-panel {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.action-section {
+  display: flex;
+  flex-direction: column;
   gap: 6px;
 }
 
-.action-panel .group-title {
-  width: 100%;
-  font-size: 11.5px;
+.action-section-header {
+  font-size: 11px;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin-top: 8px;
-  margin-bottom: 2px;
+  letter-spacing: 0.08em;
   font-weight: 600;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--panel-border);
+  margin-bottom: 2px;
 }
 
-.action-panel .group-title:first-child {
-  margin-top: 0;
+/* Two-column button row. Falls back gracefully at narrow widths by shrinking
+   content rather than overflowing. */
+.action-row-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+/* Below ~200px the two-column layout produces buttons too narrow to read.
+   Collapse to a single column. */
+@container detail-right (max-width: 220px) {
+  .action-row-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+.action-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Compact button variant for the action panel — shorter padding, smaller
+   font, centered text. Overrides the global button rule without touching
+   buttons elsewhere. */
+.action-panel button.compact {
+  padding: 6px 10px;
+  font-size: 12.5px;
+  text-align: center;
+  min-height: 30px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* "Subtle" variant: low-contrast fill for secondary / combined actions so
+   the primary Claude & Codex buttons stand out. */
+.action-panel button.subtle {
+  background: #f4f6f8;
+  color: var(--text);
+  border-color: var(--panel-border);
+}
+
+.action-panel button.subtle:hover:not(:disabled) {
+  background: var(--panel-hover);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Collapsible "unsupported tools" section — toggle header acts as button. */
+.action-section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+
+.action-section-toggle:hover {
+  color: var(--text);
+  border: none;
+  box-shadow: none;
+}
+
+.action-section-toggle .chevron {
+  font-size: 10px;
+  transition: transform 0.15s;
+  display: inline-block;
+}
+
+.action-section.collapsible.open .chevron {
+  transform: rotate(90deg);
 }
 
 .skill-detail {
@@ -502,4 +829,189 @@ input[type="text"]:focus {
   color: var(--orange);
   border-radius: var(--radius-sm);
   font-size: 12.5px;
+}
+
+.banner.banner-info {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.top-bar-sep {
+  width: 1px;
+  height: 22px;
+  background: var(--panel-border);
+  margin: 0 2px;
+  display: inline-block;
+}
+
+.show-hidden-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.show-hidden-toggle input {
+  margin: 0;
+  cursor: pointer;
+}
+
+.skill-table tr.hidden-row td {
+  opacity: 0.55;
+}
+
+.skill-table tr.frozen-row td {
+  background: #fbfaf4;
+}
+
+.badge.frozen-pill {
+  background: #fff3d6;
+  color: #8a6200;
+  margin-left: 6px;
+  padding: 0 7px;
+}
+
+.badge.hidden-pill {
+  background: #e9ecf0;
+  color: #6b7580;
+  margin-left: 4px;
+  padding: 0 7px;
+}
+
+.badge.origin-owned {
+  background: #e6efff;
+  color: #1f4a9e;
+}
+
+.badge.origin-vendored {
+  background: #f1e9fb;
+  color: #6a3ab4;
+}
+
+.badge.origin-unknown {
+  background: var(--gray-bg);
+  color: var(--gray);
+}
+
+.metadata-toggles {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.toggle input {
+  margin: 0;
+  cursor: pointer;
+}
+
+.metadata-origin select {
+  font-family: var(--sans);
+  font-size: 12.5px;
+  padding: 4px 8px;
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--text);
+}
+
+.inspector-row-wrap {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 10px;
+}
+
+.inspector-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.inspector-row {
+  padding: 10px 12px;
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-sm);
+  background: #fafbfc;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.inspector-row.kind-managed {
+  border-color: #b7e3c9;
+  background: #f4fbf6;
+}
+
+.inspector-row.kind-shadowing {
+  border-color: #f3c389;
+  background: #fdf6ea;
+}
+
+.inspector-row.kind-external {
+  border-color: #cbc1ee;
+  background: #f7f3ff;
+}
+
+.inspector-row.kind-stray-link {
+  border-color: #f0a19b;
+  background: #fef1ef;
+}
+
+.inspector-row-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.inspector-skill-name {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.badge.inspector-kind-managed { background: var(--green-bg); color: var(--green); }
+.badge.inspector-kind-shadowing { background: var(--orange-bg); color: var(--orange); }
+.badge.inspector-kind-external { background: #efe7ff; color: #6a3ab4; }
+.badge.inspector-kind-stray-link { background: var(--red-bg); color: var(--red); }
+
+.inspector-help {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.inspector-path {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text);
+  word-break: break-all;
+}
+
+.inspector-link-target {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.inspector-link-target .mono {
+  font-family: var(--mono);
+  word-break: break-all;
+}
+
+.inspector-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 2px;
 }

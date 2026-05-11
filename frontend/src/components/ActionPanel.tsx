@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { SkillInfo, ToolName } from "../types";
 import { useLanguage } from "../i18n";
 
@@ -15,43 +16,90 @@ export function ActionPanel(props: Props) {
   const { t } = useLanguage();
   const canSyncSelected = !!selectedSkill && selectedSkill.valid && !busy;
   const canSyncAll = anySkills && !busy;
+  const [unsupportedOpen, setUnsupportedOpen] = useState(false);
 
   return (
     <div className="action-panel">
-      <div className="group-title">{t("action.selectedGroup")}</div>
-      <button
-        className="primary"
-        disabled={!canSyncSelected}
-        onClick={() => selectedSkill && onSyncOne(selectedSkill, "claude")}
-      >
-        {t("action.syncSelClaude")}
-      </button>
-      <button
-        className="primary"
-        disabled={!canSyncSelected}
-        onClick={() => selectedSkill && onSyncOne(selectedSkill, "codex")}
-      >
-        {t("action.syncSelCodex")}
-      </button>
-      <button disabled={!canSyncSelected} onClick={() => onSyncMany("both", "selected")}>
-        {t("action.syncSelBoth")}
-      </button>
+      <section className="action-section">
+        <header className="action-section-header">{t("action.selectedGroup")}</header>
+        <div className="action-row action-row-split">
+          <button
+            className="primary compact"
+            disabled={!canSyncSelected}
+            onClick={() => selectedSkill && onSyncOne(selectedSkill, "claude")}
+          >
+            {t("action.syncSelClaude")}
+          </button>
+          <button
+            className="primary compact"
+            disabled={!canSyncSelected}
+            onClick={() => selectedSkill && onSyncOne(selectedSkill, "codex")}
+          >
+            {t("action.syncSelCodex")}
+          </button>
+        </div>
+        <button
+          className="compact subtle"
+          disabled={!canSyncSelected}
+          onClick={() => onSyncMany("both", "selected")}
+        >
+          {t("action.syncSelBoth")}
+        </button>
+      </section>
 
-      <div className="group-title">{t("action.allGroup")}</div>
-      <button disabled={!canSyncAll} onClick={() => onSyncMany("claude", "all")}>
-        {t("action.syncAllClaude")}
-      </button>
-      <button disabled={!canSyncAll} onClick={() => onSyncMany("codex", "all")}>
-        {t("action.syncAllCodex")}
-      </button>
-      <button disabled={!canSyncAll} onClick={() => onSyncMany("both", "all")}>
-        {t("action.syncAllBoth")}
-      </button>
+      <section className="action-section">
+        <header className="action-section-header">{t("action.allGroup")}</header>
+        <div className="action-row action-row-split">
+          <button
+            className="compact"
+            disabled={!canSyncAll}
+            onClick={() => onSyncMany("claude", "all")}
+          >
+            {t("action.syncAllClaude")}
+          </button>
+          <button
+            className="compact"
+            disabled={!canSyncAll}
+            onClick={() => onSyncMany("codex", "all")}
+          >
+            {t("action.syncAllCodex")}
+          </button>
+        </div>
+        <button
+          className="compact subtle"
+          disabled={!canSyncAll}
+          onClick={() => onSyncMany("both", "all")}
+        >
+          {t("action.syncAllBoth")}
+        </button>
+      </section>
 
-      <div className="group-title">{t("action.unsupportedGroup")}</div>
-      <button onClick={() => onUnsupportedSync("Gemini CLI")}>{t("action.syncGemini")}</button>
-      <button onClick={() => onUnsupportedSync("OpenCode")}>{t("action.syncOpenCode")}</button>
-      <button onClick={() => onUnsupportedSync("Hermes")}>{t("action.syncHermes")}</button>
+      <section className={`action-section collapsible ${unsupportedOpen ? "open" : ""}`}>
+        <button
+          type="button"
+          className="action-section-toggle"
+          onClick={() => setUnsupportedOpen((v) => !v)}
+          aria-expanded={unsupportedOpen}
+        >
+          <span className="chevron" aria-hidden>
+            ▸
+          </span>
+          <span>{t("action.unsupportedGroup")}</span>
+        </button>
+        {unsupportedOpen && (
+          <div className="action-col">
+            <button className="compact subtle" onClick={() => onUnsupportedSync("Gemini CLI")}>
+              {t("action.syncGemini")}
+            </button>
+            <button className="compact subtle" onClick={() => onUnsupportedSync("OpenCode")}>
+              {t("action.syncOpenCode")}
+            </button>
+            <button className="compact subtle" onClick={() => onUnsupportedSync("Hermes")}>
+              {t("action.syncHermes")}
+            </button>
+          </div>
+        )}
+      </section>
     </div>
   );
 }
