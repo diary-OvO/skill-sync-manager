@@ -2,23 +2,36 @@ import {
   CheckSyncStatus,
   DetectCliTools,
   GetGitStatus,
+  GetRegistry,
   ImportSkillFolder,
+  ImportSkillFromCli,
   LoadSettings,
   LogHistory,
   OpenPath,
+  QuitApp,
+  RefreshSyncStatuses,
   SaveSettings,
+  ScanCliTool,
   ScanSkills,
   SelectRootFolder,
   SelectSkillFolder,
+  SetSkillMetadata,
   SyncSkillToTool,
+  UnlinkSkill,
 } from "../../wailsjs/go/main/App";
-import { EventsOff, EventsOn } from "../../wailsjs/runtime/runtime";
+import { EventsOff, EventsOn, Quit as RuntimeQuit } from "../../wailsjs/runtime/runtime";
 
 import type {
   AppSettings,
+  CliSkillEntry,
   GitStatus,
   LogEntry,
+  Registry,
+  RegistryEntry,
   SkillInfo,
+  SkillMetadataPatch,
+  SkillOrigin,
+  SupportedTool,
   SyncStatus,
   ToolName,
   ToolStatus,
@@ -50,6 +63,32 @@ export const wailsApi = {
   logHistory: (): Promise<LogEntry[]> =>
     LogHistory() as unknown as Promise<LogEntry[]>,
 
+  scanCliTool: (toolName: SupportedTool, sharedRoot: string): Promise<CliSkillEntry[]> =>
+    ScanCliTool(toolName, sharedRoot) as unknown as Promise<CliSkillEntry[]>,
+  refreshSyncStatuses: (
+    skills: SkillInfo[],
+  ): Promise<Record<string, Record<string, SyncStatus>>> =>
+    RefreshSyncStatuses(skills as any) as unknown as Promise<
+      Record<string, Record<string, SyncStatus>>
+    >,
+  unlinkSkill: (toolName: SupportedTool, skillName: string): Promise<void> =>
+    UnlinkSkill(toolName, skillName) as unknown as Promise<void>,
+  importSkillFromCli: (
+    toolName: SupportedTool,
+    cliSkillName: string,
+    sharedRoot: string,
+    origin: SkillOrigin,
+  ): Promise<SkillInfo> =>
+    ImportSkillFromCli(toolName, cliSkillName, sharedRoot, origin) as unknown as Promise<SkillInfo>,
+  setSkillMetadata: (
+    sharedRoot: string,
+    skillName: string,
+    patch: SkillMetadataPatch,
+  ): Promise<RegistryEntry> =>
+    SetSkillMetadata(sharedRoot, skillName, patch as any) as unknown as Promise<RegistryEntry>,
+  getRegistry: (sharedRoot: string): Promise<Registry> =>
+    GetRegistry(sharedRoot) as unknown as Promise<Registry>,
+
   onLog(listener: (entry: LogEntry) => void): () => void {
     const unsubscribe = EventsOn("log:entry", (entry: LogEntry) => listener(entry));
     return () => {
@@ -59,5 +98,20 @@ export const wailsApi = {
         EventsOff("log:entry");
       }
     };
+  },
+
+  // quitApp triggers the full shutdown pipeline on the Go side
+  // (runShutdown -> runtime.Quit). Prefer this over RuntimeQuit so any future
+  // cleanup added in runShutdown is honored.
+  quitApp: (): Promise<void> => QuitApp() as unknown as Promise<void>,
+
+  // quitImmediate bypasses the Go-side pipeline and asks Wails to tear down
+  // directly. Use only when the backend is already gone or not reachable.
+  quitImmediate: (): void => {
+    try {
+      RuntimeQuit();
+    } catch {
+      /* runtime unavailable in non-Wails dev context (e.g. vite preview) */
+    }
   },
 };

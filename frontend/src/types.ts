@@ -6,6 +6,8 @@ export type SyncState =
   | "unsupported"
   | "error";
 
+export type SkillOrigin = "owned" | "vendored" | "unknown";
+
 export interface SkillInfo {
   name: string;
   description: string;
@@ -14,6 +16,11 @@ export interface SkillInfo {
   errors: string[];
   frontmatter: Record<string, string>;
   bodyPreview: string;
+  origin: SkillOrigin;
+  hidden: boolean;
+  frozen: boolean;
+  importedFrom?: string;
+  importedAtUnix?: number;
 }
 
 export interface ToolStatus {
@@ -49,6 +56,38 @@ export interface LogEntry {
   action: string;
   result: "info" | "success" | "error";
   message: string;
+}
+
+export type CliSkillKind = "managed" | "stray-link" | "shadowing" | "external";
+
+export interface CliSkillEntry {
+  toolName: string;
+  skillName: string;
+  path: string;
+  kind: CliSkillKind;
+  isLink: boolean;
+  linkTarget?: string;
+  hasSkillMd: boolean;
+  sharedRootPath?: string;
+}
+
+export interface RegistryEntry {
+  origin?: SkillOrigin;
+  hidden?: boolean;
+  frozen?: boolean;
+  importedFrom?: string;
+  importedAtUnix?: number;
+}
+
+export interface Registry {
+  version: number;
+  skills: Record<string, RegistryEntry>;
+}
+
+export interface SkillMetadataPatch {
+  hidden?: boolean;
+  frozen?: boolean;
+  origin?: SkillOrigin;
 }
 
 export const SUPPORTED_TOOLS = ["claude", "codex"] as const;
