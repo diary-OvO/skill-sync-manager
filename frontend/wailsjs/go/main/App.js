@@ -14,8 +14,16 @@ export function GetGitStatus(arg1) {
   return window['go']['main']['App']['GetGitStatus'](arg1);
 }
 
+export function GetRegistry(arg1) {
+  return window['go']['main']['App']['GetRegistry'](arg1);
+}
+
 export function ImportSkillFolder(arg1, arg2) {
   return window['go']['main']['App']['ImportSkillFolder'](arg1, arg2);
+}
+
+export function ImportSkillFromCli(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['ImportSkillFromCli'](arg1, arg2, arg3, arg4);
 }
 
 export function LoadSettings() {
@@ -30,8 +38,20 @@ export function OpenPath(arg1) {
   return window['go']['main']['App']['OpenPath'](arg1);
 }
 
+export function QuitApp() {
+  return window['go']['main']['App']['QuitApp']();
+}
+
+export function RefreshSyncStatuses(arg1) {
+  return window['go']['main']['App']['RefreshSyncStatuses'](arg1);
+}
+
 export function SaveSettings(arg1) {
   return window['go']['main']['App']['SaveSettings'](arg1);
+}
+
+export function ScanCliTool(arg1, arg2) {
+  return window['go']['main']['App']['ScanCliTool'](arg1, arg2);
 }
 
 export function ScanSkills(arg1) {
@@ -46,6 +66,14 @@ export function SelectSkillFolder() {
   return window['go']['main']['App']['SelectSkillFolder']();
 }
 
+export function SetSkillMetadata(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SetSkillMetadata'](arg1, arg2, arg3);
+}
+
 export function SyncSkillToTool(arg1, arg2) {
   return window['go']['main']['App']['SyncSkillToTool'](arg1, arg2);
+}
+
+export function UnlinkSkill(arg1, arg2) {
+  return window['go']['main']['App']['UnlinkSkill'](arg1, arg2);
 }
