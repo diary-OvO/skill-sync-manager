@@ -7,6 +7,8 @@
 frontend/node_modules/
 frontend/dist/
 frontend/package-lock.json
+# Wails regenerates this on every `wails dev` / `wails build`
+frontend/package.json.md5
 
 # Editor
 .idea/
