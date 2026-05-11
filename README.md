@@ -9,7 +9,7 @@ A "skill" is a folder containing a `SKILL.md` (with YAML frontmatter describing 
 Claude Code and OpenAI Codex each expect skills in their own directory. Copying skills between directories means every edit has to be duplicated. Skill Sync Manager keeps every skill in one place (for example `D:\AgentSkills`) and the app creates **Windows directory junctions**:
 
 - `%USERPROFILE%\.claude\skills\<skill-name>` → `D:\AgentSkills\<skill-name>`
-- `%USERPROFILE%\.agents\skills\<skill-name>` → `D:\AgentSkills\<skill-name>`
+- `%USERPROFILE%\.codex\skills\<skill-name>` → `D:\AgentSkills\<skill-name>`
 
 Edit once. Both tools see the update. The shared root is the single source of truth.
 
@@ -29,7 +29,7 @@ The React + TypeScript + Vite frontend layer is unchanged in spirit — same com
 | Tool | Status | Target directory |
 | --- | --- | --- |
 | Claude Code | Supported | `%USERPROFILE%\.claude\skills` |
-| OpenAI Codex | Supported | `%USERPROFILE%\.agents\skills` |
+| OpenAI Codex | Supported | `%USERPROFILE%\.codex\skills` |
 | Gemini CLI | UI placeholder | not yet supported |
 | OpenCode | UI placeholder | not yet supported |
 | Hermes | UI placeholder | not yet supported |
@@ -218,6 +218,6 @@ Then:
 2. In the UI, Browse to `D:\AgentSkills`.
 3. Click `Scan`. You should see `test-skill`.
 4. Click `Sync Selected to Claude`, then check `dir $env:USERPROFILE\.claude\skills`.
-5. Click `Sync Selected to Codex`, then check `dir $env:USERPROFILE\.agents\skills`.
+5. Click `Sync Selected to Codex`, then check `dir $env:USERPROFILE\.codex\skills`.
 6. Click sync again — state stays `synced`, no duplicate junctions created.
 7. Pre-create a real directory at the target location to verify it reports `conflict` and does not overwrite.

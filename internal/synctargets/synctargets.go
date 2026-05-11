@@ -38,7 +38,7 @@ func GetCodexSkillsDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(h, ".agents", "skills"), nil
+	return filepath.Join(h, ".codex", "skills"), nil
 }
 
 // GetTargetDir returns the per-tool skills directory. For unsupported tools
@@ -175,4 +175,31 @@ func SyncSkillToTool(skill models.SkillInfo, toolName string) (models.SyncStatus
 		State:      models.SyncStateSynced,
 		Message:    fmt.Sprintf("Created junction %s -> %s", current.TargetPath, skill.Path),
 	}, nil
+}
+
+// UnlinkSkillFromTool removes the junction/symlink for `skillName` under
+// `toolName`'s target directory. It refuses to touch real directories —
+// only link entries are ever removed. Safe to call when nothing exists.
+func UnlinkSkillFromTool(toolName string, skillName string) error {
+	if skillName == "" {
+		return fmt.Errorf("skill name must not be empty")
+	}
+	targetPath, err := GetTargetPath(toolName, skillName)
+	if err != nil {
+		return err
+	}
+	if !symlinkwindows.PathExists(targetPath) {
+		return nil
+	}
+	if !symlinkwindows.IsLinkPath(targetPath) {
+		return fmt.Errorf(
+			"%s is a real directory, not a junction/symlink. Skill Sync Manager will not delete it.",
+			targetPath,
+		)
+	}
+	// os.Remove deletes symlinks and junctions without following them.
+	if err := os.Remove(targetPath); err != nil {
+		return fmt.Errorf("failed to remove link %s: %v", targetPath, err)
+	}
+	return nil
 }
