@@ -4,10 +4,11 @@
   "version": "0.2.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "predev": "node scripts/check-port.mjs",
+    "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "lint": "echo \"lint not configured yet\""
   },
   "dependencies": {

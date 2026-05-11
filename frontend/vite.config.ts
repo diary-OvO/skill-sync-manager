@@ -1,6 +1,9 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
+const DEV_HOST = "127.0.0.1";
+const DEV_PORT = 5173;
+
 export default defineConfig({
   plugins: [react()],
   build: {
@@ -8,7 +11,14 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
-    port: 5173,
+    host: DEV_HOST,
+    port: DEV_PORT,
     strictPort: true,
+    hmr: {
+      host: DEV_HOST,
+      protocol: "ws",
+      port: DEV_PORT,
+      clientPort: DEV_PORT,
+    },
   },
 });

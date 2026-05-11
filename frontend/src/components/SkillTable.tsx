@@ -103,7 +103,17 @@ export function SkillTable({
           <div className="empty">{t("table.empty")}</div>
         ) : (
           <div className={`skill-table-scroll ${dragging ? "col-resizing" : ""}`}>
-            <table className="skill-table" style={{ tableLayout: "fixed", width: "max-content" }}>
+            <table
+              className="skill-table"
+              style={{
+                tableLayout: "fixed",
+                // Sum of column widths — anchors the table at its natural
+                // total but lets the outer `.skill-table-scroll` scroll
+                // horizontally when the viewport is narrower.
+                width: COLUMN_ORDER.reduce((sum, k) => sum + (widths[k] ?? 0), 0),
+                minWidth: "100%",
+              }}
+            >
               <colgroup>
                 {COLUMN_ORDER.map((col) => (
                   <col key={col} style={{ width: widths[col] }} />

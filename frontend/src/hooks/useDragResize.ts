@@ -107,6 +107,36 @@ function useAxialSplit(
     };
   }, [axis, dragging, minFirst, minSecond, setFirstSize]);
 
+  // Re-clamp `firstSize` whenever the container shrinks below a size that
+  // could still accommodate [minFirst, span - minSecond]. Without this, a
+  // leftWidth of 560 persisted from a wide window would push the right pane
+  // off-screen on a narrow window. Also runs once on mount in case the stored
+  // value is stale relative to the current viewport.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || typeof ResizeObserver === "undefined") return;
+    const clampTo = (span: number) => {
+      if (span <= 0) return;
+      const max = Math.max(minFirst, span - minSecond);
+      setFirstSize((prev) => {
+        if (prev > max) return max;
+        if (prev < minFirst) return minFirst;
+        return prev;
+      });
+    };
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const span = axis === "vertical" ? entry.contentRect.height : entry.contentRect.width;
+        clampTo(span);
+      }
+    });
+    ro.observe(container);
+    // Initial clamp using whatever size the container has right now.
+    const rect = container.getBoundingClientRect();
+    clampTo(axis === "vertical" ? rect.height : rect.width);
+    return () => ro.disconnect();
+  }, [axis, minFirst, minSecond, setFirstSize]);
+
   return { firstSize, containerRef, onHandleMouseDown, dragging };
 }
 

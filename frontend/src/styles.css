@@ -113,6 +113,12 @@ input[type="text"]:focus {
   width: 100vw;
   gap: 10px;
   padding: 14px;
+  /* Prevent any wide descendant from pushing the top-level grid past the
+     viewport — the whole tree below must fit within 100vw or scroll locally. */
+  min-width: 0;
+  max-width: 100vw;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .top-bar {
@@ -188,6 +194,7 @@ input[type="text"]:focus {
   grid-template-columns: 300px minmax(0, 1fr);
   gap: 10px;
   min-height: 0;
+  min-width: 0;
 }
 
 .sidebar {
@@ -217,6 +224,7 @@ input[type="text"]:focus {
 .split-top {
   flex: 0 0 auto;
   min-height: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -225,11 +233,14 @@ input[type="text"]:focus {
 .split-top > .panel {
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .split-bottom {
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -238,6 +249,8 @@ input[type="text"]:focus {
 .split-bottom > .panel {
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .split-handle {
@@ -281,6 +294,10 @@ input[type="text"]:focus {
   min-height: 0;
   min-width: 0;
   overflow: hidden;
+  /* Enables @container queries so the split itself can restack to vertical
+     when the pane is too narrow, independent of viewport width. */
+  container-type: inline-size;
+  container-name: detail-split;
 }
 
 .detail-split.split-dragging {
@@ -335,6 +352,35 @@ input[type="text"]:focus {
   padding: 12px;
 }
 
+/* Narrow detail pane → restack vertically: info on top, handle becomes a
+   horizontal divider, actions below. Overrides the inline `width` pushed
+   onto .detail-split-left so the left pane fills the full width. */
+@container detail-split (max-width: 900px) {
+  .detail-split {
+    flex-direction: column;
+  }
+  .detail-split-left {
+    width: 100% !important;
+    flex: 0 0 auto;
+    max-height: 55%;
+  }
+  .detail-split-right {
+    flex: 1 1 auto;
+    border-left: none;
+    border-top: 1px solid var(--panel-border);
+  }
+  .split-handle-col {
+    width: 100%;
+    height: 8px;
+    cursor: row-resize;
+    align-self: auto;
+  }
+  .split-handle-col .split-handle-grip {
+    width: 56px;
+    height: 3px;
+  }
+}
+
 @media (max-width: 960px) {
   .main-grid {
     grid-template-columns: 1fr;
@@ -352,7 +398,10 @@ input[type="text"]:focus {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
+  box-sizing: border-box;
 }
 
 .panel-header {
@@ -443,9 +492,12 @@ input[type="text"]:focus {
 .badge.bad { background: var(--red-bg); color: var(--red); }
 
 .skill-table-scroll {
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: auto;
   height: 100%;
   min-height: 0;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .skill-table-scroll.col-resizing {
@@ -646,21 +698,46 @@ input[type="text"]:focus {
 
 .action-col {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap;
   gap: 6px;
+}
+
+.action-col > button.compact {
+  flex: 1 1 140px;
+  min-width: 0;
 }
 
 /* Compact button variant for the action panel — shorter padding, smaller
    font, centered text. Overrides the global button rule without touching
    buttons elsewhere. */
 .action-panel button.compact {
-  padding: 6px 10px;
+  padding: 4px 10px;
   font-size: 12.5px;
   text-align: center;
-  min-height: 30px;
+  min-height: 28px;
+  line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* A full-width `.compact` button directly inside an action-section (i.e. not
+   part of a 2-column row-split) was rendering as a giant horizontal bar.
+   Let it size to its content and align to the start, so it reads as a
+   secondary action rather than a banner. */
+.action-section > button.compact {
+  align-self: flex-start;
+  min-width: 140px;
+  max-width: 100%;
+}
+
+/* Keep the 2-column row-split children full-width within their grid cell —
+   only the standalone button above should shrink. */
+.action-row-split > button.compact {
+  align-self: stretch;
+  min-width: 0;
+  width: 100%;
 }
 
 /* "Subtle" variant: low-contrast fill for secondary / combined actions so
