@@ -7,9 +7,12 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"skill-sync-manager/internal/models"
 	"skill-sync-manager/internal/registry"
+	"skill-sync-manager/internal/symlinkwindows"
+	"skill-sync-manager/internal/synctargets"
 )
 
 const BodyPreviewLimit = 800
@@ -312,4 +315,100 @@ func copyFile(src, dest string) error {
 		return err
 	}
 	return nil
+}
+
+// ImportFromCli copies a real skill directory that currently lives inside
+// a CLI tool's skills folder into the shared root, and records its origin
+// in the registry. The CLI-side copy is NOT modified — the caller can
+// decide whether to delete it and reroute via a junction.
+//
+// `origin` must be "owned" or "vendored"; any other value is normalized
+// to "vendored" on the assumption that skills pre-existing in a CLI dir
+// most often came from somewhere external.
+func ImportFromCli(toolName string, cliSkillName string, sharedRoot string, origin models.SkillOrigin) (models.SkillInfo, error) {
+	var zero models.SkillInfo
+	if cliSkillName == "" {
+		return zero, fmt.Errorf("CLI skill name must not be empty")
+	}
+	if sharedRoot == "" {
+		return zero, fmt.Errorf("shared root must not be empty")
+	}
+	rootInfo, err := os.Stat(sharedRoot)
+	if err != nil || !rootInfo.IsDir() {
+		return zero, fmt.Errorf("shared skill root does not exist: %s", sharedRoot)
+	}
+
+	cliDir, err := synctargets.GetTargetDir(toolName)
+	if err != nil {
+		return zero, err
+	}
+	source := filepath.Join(cliDir, cliSkillName)
+
+	// Only import real directories. A junction already implies the skill
+	// is managed from the shared root, so importing would be a duplicate.
+	if symlinkwindows.IsLinkPath(source) {
+		return zero, fmt.Errorf(
+			"%s is a junction/symlink, not a standalone skill. Nothing to import.",
+			source,
+		)
+	}
+	if st, err := os.Stat(source); err != nil || !st.IsDir() {
+		return zero, fmt.Errorf("CLI skill source is not a directory: %s", source)
+	}
+
+	skillMd := filepath.Join(source, "SKILL.md")
+	if st, err := os.Stat(skillMd); err != nil || st.IsDir() {
+		return zero, fmt.Errorf("CLI skill folder does not contain SKILL.md: %s", source)
+	}
+
+	parsed, _ := ParseSkillMarkdown(skillMd)
+	targetName := parsed.Name
+	if targetName == "" {
+		// Fall back to the folder name if frontmatter is incomplete.
+		targetName = cliSkillName
+	}
+
+	targetDir := filepath.Join(sharedRoot, targetName)
+	if _, err := os.Lstat(targetDir); err == nil {
+		return zero, fmt.Errorf(
+			"target already exists at %s. Rename the CLI skill or remove the existing entry before importing.",
+			targetDir,
+		)
+	} else if !os.IsNotExist(err) {
+		return zero, fmt.Errorf("failed to stat target %s: %v", targetDir, err)
+	}
+
+	if err := copyDirectory(source, targetDir); err != nil {
+		return zero, fmt.Errorf("failed to copy skill: %v", err)
+	}
+
+	// Normalize origin. Empty / unknown values become vendored because the
+	// skill came from outside the shared root.
+	switch origin {
+	case models.SkillOriginOwned, models.SkillOriginVendored:
+		// ok
+	default:
+		origin = models.SkillOriginVendored
+	}
+
+	reg, _ := registry.Load(sharedRoot)
+	reg.Set(targetName, registry.Entry{
+		Origin:         origin,
+		ImportedFrom:   source,
+		ImportedAtUnix: time.Now().Unix(),
+	})
+	if err := registry.Save(sharedRoot, reg); err != nil {
+		// Don't roll back the copy — the skill is on disk and valid. Just
+		// surface the registry write error so the UI can tell the user the
+		// metadata didn't persist.
+		return zero, fmt.Errorf("skill copied but registry write failed: %v", err)
+	}
+
+	scanned, _ := ScanSkills(sharedRoot)
+	for _, s := range scanned {
+		if s.Path == targetDir {
+			return s, nil
+		}
+	}
+	return zero, fmt.Errorf("imported folder could not be scanned back: %s", targetDir)
 }
