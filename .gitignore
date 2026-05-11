@@ -1,10 +1,19 @@
-node_modules/
-out/
-.vite/
-dist/
-*.log
+# Go build output
+/build/
+*.exe
+*.tsbuildinfo
+
+# Node / frontend
+frontend/node_modules/
+frontend/dist/
+frontend/package-lock.json
+
+# Editor
+.idea/
+.vscode/
 .DS_Store
+*.log
+
+# Local env
 .env
 .env.local
-*.tsbuildinfo
-.idea/

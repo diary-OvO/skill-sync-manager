@@ -1,0 +1,18 @@
+[tools]
+go = "1.24"
+node = "22"
+
+[tasks.dev]
+description = "Run Wails dev server"
+run = "wails dev"
+
+[tasks.build]
+description = "Build Wails app"
+run = "wails build"
+
+[tasks.test]
+description = "Run Go tests and frontend tests"
+run = [
+  "go test ./...",
+  "cd frontend && npm test"
+]
