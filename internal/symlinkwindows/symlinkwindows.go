@@ -25,9 +25,13 @@ func PathExists(p string) bool {
 }
 
 // IsLinkPath reports whether p is a symlink or directory junction.
-// Go >= 1.23 returns ModeSymlink for NTFS directory junctions on Windows.
-// We also fall back to a conservative EvalSymlinks probe if Lstat says no
-// but the resolved path differs from the literal path.
+// On Windows, Go's treatment of NTFS directory junctions has changed
+// across versions. We try three signals in order:
+//  1. Lstat mode bits (ModeSymlink and/or ModeIrregular/reparse bits).
+//  2. os.Readlink success — a plain directory returns an error.
+//  3. EvalSymlinks difference — resolved path differs from the input.
+//
+// Any single positive signal is enough.
 func IsLinkPath(p string) bool {
 	st, err := os.Lstat(p)
 	if err != nil {
@@ -36,8 +40,13 @@ func IsLinkPath(p string) bool {
 	if st.Mode()&os.ModeSymlink != 0 {
 		return true
 	}
-	// Fallback probe: on older Go or unusual junctions, EvalSymlinks can still
-	// expose a mismatch between link and target.
+	// On some Go/Windows combinations, junctions come back as regular
+	// directories from Lstat. Readlink, however, will succeed for a
+	// junction and return its target; for a plain directory it errors.
+	if _, err := os.Readlink(p); err == nil {
+		return true
+	}
+	// Last-resort probe.
 	abs, err := filepath.Abs(p)
 	if err != nil {
 		return false
@@ -54,10 +63,26 @@ func IsLinkPath(p string) bool {
 
 // ResolveRealPath returns the absolute path a junction or symlink points to.
 // For a plain directory, it returns the absolute path of that directory.
+//
+// On Windows, Go's filepath.EvalSymlinks sometimes does not traverse
+// directory junctions cleanly (it may return the link path itself). We
+// therefore try os.Readlink first when the entry is a link — that
+// reads the NTFS reparse point directly and returns the raw target.
 func ResolveRealPath(p string) (string, error) {
 	abs, err := filepath.Abs(p)
 	if err != nil {
 		return "", err
+	}
+	if IsLinkPath(abs) {
+		if target, err := os.Readlink(abs); err == nil && target != "" {
+			if !filepath.IsAbs(target) {
+				target = filepath.Join(filepath.Dir(abs), target)
+			}
+			if t2, err := filepath.Abs(target); err == nil {
+				return filepath.Clean(t2), nil
+			}
+			return filepath.Clean(target), nil
+		}
 	}
 	resolved, err := filepath.EvalSymlinks(abs)
 	if err != nil {
