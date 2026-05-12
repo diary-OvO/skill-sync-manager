@@ -25,6 +25,7 @@ import { useVerticalSplit } from "./hooks/useDragResize";
 import { useShutdownCleanup } from "./hooks/useShutdownCleanup";
 import { useSyncActions, type SyncStatusMap } from "./hooks/useSyncActions";
 import { useIgnoredPaths } from "./hooks/useIgnoredPaths";
+import { useGitAutoRefresh } from "./hooks/useGitAutoRefresh";
 import { useLanguage } from "./i18n";
 
 // 向后兼容：历史上 SyncStatusMap 在 App.tsx 导出，现在搬到 hooks 里，保留 re-export。
@@ -106,7 +107,14 @@ function AppInner() {
         logLocal("startup", "error", (err as Error).message);
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
+  // 日志订阅独立成 effect：不能与 didInit 守卫的启动流程共用，否则
+  // React 18 StrictMode 的 mount → cleanup → mount 二次执行里，
+  // cleanup 会取消首个订阅，二次 mount 因为 didInit 守卫立即 return，
+  // 订阅不会重建，后端推过来的日志就全部丢失 —— 这正是 Log 面板看起来"不更新"的根因。
+  useEffect(() => {
     const unsubscribe = api.onLog((entry) => {
       appendLog(entry);
     });
@@ -115,7 +123,6 @@ function AppInner() {
       unsubscribe();
       logUnsubRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 关闭时的同步幂等清理：pagehide / beforeunload / 组件卸载都会触发。
@@ -142,14 +149,17 @@ function AppInner() {
   }
 
   // 构造并追加一条本地日志。统一处理 timestamp，避免调用处到处重复 `new Date().toISOString()`。
-  function logLocal(action: string, result: LogEntry["result"], message: string): void {
-    appendLog({
-      timestamp: new Date().toISOString(),
-      action,
-      result,
-      message,
-    });
-  }
+  const logLocal = useCallback(
+    (action: string, result: LogEntry["result"], message: string): void => {
+      appendLog({
+        timestamp: new Date().toISOString(),
+        action,
+        result,
+        message,
+      });
+    },
+    [],
+  );
 
   // 合并某个 skill × tool 的同步状态到全局 syncStatus。
   // useSyncActions 的 syncOne / bulkSync / refreshOne 都走这一个入口，
@@ -175,6 +185,15 @@ function AppInner() {
   );
 
   const actions = useSyncActions({ skills, syncStatus, mergeSyncStatus, refreshOne });
+
+  // Git 状态三路同步：30s 定时 + 窗口聚焦 + 操作后主动调 refreshNow()。
+  // 单次 GetGitStatus 需要 5 个 git CLI 调用（~250-1000ms），30s 频率
+  // 对磁盘/CPU 压力可忽略；但聚焦触发能保证用户切回应用看到的就是最新态。
+  const { refreshNow: refreshGitStatus } = useGitAutoRefresh({
+    sharedRoot,
+    setGitStatus,
+    logLocal,
+  });
 
   async function refreshSyncStatuses(list: SkillInfo[]): Promise<SyncStatusMap> {
     if (list.length === 0) return {};
@@ -261,6 +280,7 @@ function AppInner() {
   const cancelScan = useCallback(() => {
     scanTokenRef.current += 1;
     setBusy(false);
+    logLocal("scan.cancel", "info", "User cancelled the scan. Ongoing backend work will finish but its results will be discarded.");
   }, []);
 
   async function handleBrowseRoot(): Promise<void> {
@@ -291,6 +311,9 @@ function AppInner() {
     try {
       const map = await refreshSyncStatuses(skills);
       setSyncStatus(map);
+      logLocal("sync.refresh", "success", `Refreshed sync status for ${skills.length} skill(s).`);
+    } catch (err) {
+      logLocal("sync.refresh", "error", (err as Error).message);
     } finally {
       setBusy(false);
     }
@@ -328,6 +351,9 @@ function AppInner() {
       const skill = await api.importSkillFolder(picked, sharedRoot);
       await runScanFlow(sharedRoot);
       setSelectedSkillPath(skill.path);
+      // 导入会把一个外部目录复制进共享根 —— 这很可能让 git 树变脏。
+      // 主动拉一次 status，比等 30s 轮询更贴合"刚操作完想马上看到"的预期。
+      void refreshGitStatus();
     } catch (err) {
       window.alert(t("action.importFail", { message: (err as Error).message }));
     }
@@ -335,6 +361,9 @@ function AppInner() {
 
   async function handleSyncOne(skill: SkillInfo, toolName: ToolName): Promise<void> {
     await actions.syncOne(skill, toolName);
+    // syncOne 本身只改 CLI 目录下的 junction，不动共享根，所以
+    // 一般不影响 git 状态；但保险起见刷一次（非常便宜，hook 内部有 inflight 守卫）。
+    void refreshGitStatus();
   }
 
   async function handleOpenRoot(): Promise<void> {
@@ -376,6 +405,8 @@ function AppInner() {
     try {
       await api.unlinkSkill(entry.toolName as SupportedTool, entry.skillName);
       await handleRescanCli(entry.toolName as SupportedTool);
+      // unlink 只碰 CLI junction，不动共享根，但顺手刷一下避免漏掉边角情况。
+      void refreshGitStatus();
     } catch (err) {
       window.alert((err as Error).message);
     }
@@ -399,6 +430,8 @@ function AppInner() {
       await runScanFlow(sharedRoot);
       setSelectedSkillPath(skill.path);
       await handleRescanCli(entry.toolName as SupportedTool);
+      // 从 CLI 导入 = 把外部目录复制进共享根，几乎必然让 git 变脏。
+      void refreshGitStatus();
     } catch (err) {
       window.alert((err as Error).message);
     }
@@ -530,9 +563,18 @@ function AppInner() {
                   onUnlink={handleInspectorUnlink}
                   onImport={handleInspectorImport}
                   onOpen={handleInspectorOpen}
-                  onIgnore={(e) => ignoredPaths.ignore(e.path)}
-                  onUnignore={ignoredPaths.unignore}
-                  onClose={() => setInspector((prev) => ({ ...prev, claude: [] }))}
+                  onIgnore={(e) => {
+                    ignoredPaths.ignore(e.path);
+                    logLocal("inspector.ignore", "info", `Ignored ${e.path}`);
+                  }}
+                  onUnignore={(path) => {
+                    ignoredPaths.unignore(path);
+                    logLocal("inspector.unignore", "info", `Restored ${path}`);
+                  }}
+                  onClose={() => {
+                    setInspector((prev) => ({ ...prev, claude: [] }));
+                    logLocal("inspector.close", "info", "Closed the Claude CLI inspector panel.");
+                  }}
                 />
               )}
               {inspector.codex.length > 0 && (
@@ -544,9 +586,18 @@ function AppInner() {
                   onUnlink={handleInspectorUnlink}
                   onImport={handleInspectorImport}
                   onOpen={handleInspectorOpen}
-                  onIgnore={(e) => ignoredPaths.ignore(e.path)}
-                  onUnignore={ignoredPaths.unignore}
-                  onClose={() => setInspector((prev) => ({ ...prev, codex: [] }))}
+                  onIgnore={(e) => {
+                    ignoredPaths.ignore(e.path);
+                    logLocal("inspector.ignore", "info", `Ignored ${e.path}`);
+                  }}
+                  onUnignore={(path) => {
+                    ignoredPaths.unignore(path);
+                    logLocal("inspector.unignore", "info", `Restored ${path}`);
+                  }}
+                  onClose={() => {
+                    setInspector((prev) => ({ ...prev, codex: [] }));
+                    logLocal("inspector.close", "info", "Closed the Codex CLI inspector panel.");
+                  }}
                 />
               )}
             </div>
@@ -554,7 +605,7 @@ function AppInner() {
         </div>
       </div>
 
-      <LogPanel entries={logs} />
+      <LogPanel entries={logs} onClear={() => setLogs([])} />
       <ScanProgressOverlay open={busy} onCancel={cancelScan} />
     </div>
   );

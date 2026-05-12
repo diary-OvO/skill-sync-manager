@@ -4,9 +4,10 @@ import { useLanguage } from "../i18n";
 
 interface Props {
   entries: LogEntry[];
+  onClear: () => void;
 }
 
-export function LogPanel({ entries }: Props) {
+export function LogPanel({ entries, onClear }: Props) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const { t } = useLanguage();
 
@@ -16,7 +17,22 @@ export function LogPanel({ entries }: Props) {
 
   return (
     <div className="panel" style={{ maxHeight: 180 }}>
-      <div className="panel-header">{t("log.title")}</div>
+      <div className="panel-header log-panel-header">
+        <span>{t("log.title")}</span>
+        <span className="log-panel-meta">
+          <span className="log-panel-count">
+            {t("log.count", { count: String(entries.length) })}
+          </span>
+          <button
+            type="button"
+            className="ghost log-panel-clear"
+            onClick={onClear}
+            disabled={entries.length === 0}
+          >
+            {t("log.clear")}
+          </button>
+        </span>
+      </div>
       <div className="panel-body log-panel">
         {entries.length === 0 ? (
           <div className="empty">{t("log.empty")}</div>

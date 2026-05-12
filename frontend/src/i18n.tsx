@@ -142,6 +142,8 @@ const messages: Record<Lang, MessageTree> = {
     log: {
       title: "Logs",
       empty: "No activity yet.",
+      count: "{count} entries",
+      clear: "Clear",
     },
     inspector: {
       title: "CLI Inspector",
@@ -334,6 +336,8 @@ const messages: Record<Lang, MessageTree> = {
     log: {
       title: "日志",
       empty: "暂无活动。",
+      count: "{count} 条",
+      clear: "清空",
     },
     inspector: {
       title: "CLI 检查器",
