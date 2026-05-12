@@ -25,6 +25,15 @@ const messages: Record<Lang, MessageTree> = {
       rescanClaude: "Rescan Claude",
       rescanCodex: "Rescan Codex",
     },
+    scan: {
+      overlay: {
+        title: "Scanning…",
+        hint: "Reading shared root, git status and CLI tools.",
+        cancel: "Cancel",
+        close: "Close",
+      },
+      error: "Scan partially failed: {message}",
+    },
     git: {
       title: "Git Status",
       none: "No status yet.",
@@ -158,11 +167,19 @@ const messages: Record<Lang, MessageTree> = {
         importOwned: "Import as owned",
         importVendored: "Import as vendored",
         open: "Open folder",
+        ignore: "Ignore",
+        ignoreTitle: "Never show this folder again",
       },
       confirm: {
         unlink: "Remove the junction at {path}? The real files it points at are untouched.",
       },
       emptyForTool: "No entries scanned for {tool} yet.",
+      ignored: {
+        toggle: "Ignored ({count})",
+        empty: "Nothing ignored yet.",
+        restore: "Restore",
+        clearAll: "Clear all",
+      },
     },
     skill: {
       origin: "Origin",
@@ -198,6 +215,15 @@ const messages: Record<Lang, MessageTree> = {
       refreshSync: "刷新同步状态",
       rescanClaude: "重新扫描 Claude",
       rescanCodex: "重新扫描 Codex",
+    },
+    scan: {
+      overlay: {
+        title: "正在扫描…",
+        hint: "正在读取共享根目录、git 状态和 CLI 工具。",
+        cancel: "取消",
+        close: "关闭",
+      },
+      error: "扫描部分失败：{message}",
     },
     git: {
       title: "Git 状态",
@@ -330,11 +356,19 @@ const messages: Record<Lang, MessageTree> = {
         importOwned: "导入为 自建",
         importVendored: "导入为 下载",
         open: "打开目录",
+        ignore: "忽略此项",
+        ignoreTitle: "永久忽略这个目录，后续扫描不再出现",
       },
       confirm: {
         unlink: "移除位于 {path} 的链接？目标数据本身不会被删除。",
       },
       emptyForTool: "尚未扫描 {tool} 的条目。",
+      ignored: {
+        toggle: "已忽略 ({count})",
+        empty: "暂无忽略项。",
+        restore: "恢复",
+        clearAll: "全部清空",
+      },
     },
     skill: {
       origin: "来源",

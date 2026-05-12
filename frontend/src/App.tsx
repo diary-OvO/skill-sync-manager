@@ -19,10 +19,12 @@ import { SkillDetail } from "./components/SkillDetail";
 import { GlobalSyncBar } from "./components/GlobalSyncBar";
 import { LogPanel } from "./components/LogPanel";
 import { ToolInspectorPanel } from "./components/ToolInspectorPanel";
-import { ToastProvider } from "./components/Toast";
+import { ToastProvider, useToast } from "./components/Toast";
+import { ScanProgressOverlay } from "./components/ScanProgressOverlay";
 import { useVerticalSplit } from "./hooks/useDragResize";
 import { useShutdownCleanup } from "./hooks/useShutdownCleanup";
 import { useSyncActions, type SyncStatusMap } from "./hooks/useSyncActions";
+import { useIgnoredPaths } from "./hooks/useIgnoredPaths";
 import { useLanguage } from "./i18n";
 
 // 向后兼容：历史上 SyncStatusMap 在 App.tsx 导出，现在搬到 hooks 里，保留 re-export。
@@ -51,6 +53,8 @@ export function App() {
 
 function AppInner() {
   const { t } = useLanguage();
+  const toast = useToast();
+  const ignoredPaths = useIgnoredPaths();
 
   const [sharedRoot, setSharedRoot] = useState<string>("");
   const [skills, setSkills] = useState<SkillInfo[]>([]);
@@ -71,6 +75,9 @@ function AppInner() {
   // 保存 Wails "log:entry" 的取消订阅函数，关闭时优先用它来清理。
   // React 卸载清理在 pagehide / 窗口关闭时可能来不及触发，因此这里用 ref 兜底。
   const logUnsubRef = useRef<(() => void) | null>(null);
+  // 扫描 token：每次 runScanFlow 开启时 +1；用户按取消或开启新扫描都会
+  // 让旧 token 不再匹配，回调 setXxx 被全部丢弃，避免"取消后旧结果覆盖"。
+  const scanTokenRef = useRef(0);
 
   useEffect(() => {
     if (didInit.current) return;
@@ -196,27 +203,65 @@ function AppInner() {
 
   async function runScanFlow(root: string): Promise<void> {
     if (!root) return;
+    const token = ++scanTokenRef.current;
     setBusy(true);
     try {
-      const [scanned, git, toolList] = await Promise.all([
+      // allSettled：三个 API 任何一个报错（无权限 / 路径不存在 / CLI 工具检测失败），
+      // 都不应该让其他两个结果一起丢，也绝不能把整个 UI 卡死。
+      const [scannedRes, gitRes, toolsRes] = await Promise.allSettled([
         api.scanSkills(root),
         api.getGitStatus(root),
         api.detectCliTools(),
       ]);
-      setSkills(scanned);
-      setGitStatus(git);
-      setTools(toolList);
-      const statuses = await refreshSyncStatuses(scanned);
-      setSyncStatus(statuses);
-      if (scanned.length > 0 && !scanned.find((s) => s.path === selectedSkillPath)) {
-        setSelectedSkillPath(scanned[0].path);
+
+      // 用户在期间按了取消（token 被 bump）—— 直接丢弃结果。
+      if (token !== scanTokenRef.current) return;
+
+      if (scannedRes.status === "fulfilled") {
+        setSkills(scannedRes.value);
+        const scanned = scannedRes.value;
+        const statuses = await refreshSyncStatuses(scanned);
+        if (token !== scanTokenRef.current) return;
+        setSyncStatus(statuses);
+        if (scanned.length > 0 && !scanned.find((s) => s.path === selectedSkillPath)) {
+          setSelectedSkillPath(scanned[0].path);
+        }
+      } else {
+        const msg = (scannedRes.reason as Error)?.message ?? String(scannedRes.reason);
+        logLocal("scan", "error", msg);
+        toast.push({ kind: "error", message: t("scan.error", { message: msg }) });
       }
-    } catch (err) {
-      logLocal("scan", "error", (err as Error).message);
+
+      if (gitRes.status === "fulfilled") {
+        setGitStatus(gitRes.value);
+      } else {
+        logLocal("scan.git", "error", (gitRes.reason as Error)?.message ?? String(gitRes.reason));
+      }
+
+      if (toolsRes.status === "fulfilled") {
+        setTools(toolsRes.value);
+      } else {
+        logLocal(
+          "scan.tools",
+          "error",
+          (toolsRes.reason as Error)?.message ?? String(toolsRes.reason),
+        );
+      }
     } finally {
-      setBusy(false);
+      // 无论成功、失败、还是已被取消（token 已不匹配），一定要把遮罩收回去。
+      if (token === scanTokenRef.current) {
+        setBusy(false);
+      }
     }
   }
+
+  // 取消当前扫描：只是关闭遮罩并丢弃飞行中结果。
+  // Wails 不支持取消已经下发的 goroutine，因此后端仍会跑完，
+  // 但前端从此刻起看不见它的 setState。
+  const cancelScan = useCallback(() => {
+    scanTokenRef.current += 1;
+    setBusy(false);
+  }, []);
 
   async function handleBrowseRoot(): Promise<void> {
     try {
@@ -481,9 +526,12 @@ function AppInner() {
                   tool="claude"
                   entries={inspector.claude}
                   scanning={inspectorBusy.claude}
+                  ignored={ignoredPaths.ignored}
                   onUnlink={handleInspectorUnlink}
                   onImport={handleInspectorImport}
                   onOpen={handleInspectorOpen}
+                  onIgnore={(e) => ignoredPaths.ignore(e.path)}
+                  onUnignore={ignoredPaths.unignore}
                 />
               )}
               {inspector.codex.length > 0 && (
@@ -491,9 +539,12 @@ function AppInner() {
                   tool="codex"
                   entries={inspector.codex}
                   scanning={inspectorBusy.codex}
+                  ignored={ignoredPaths.ignored}
                   onUnlink={handleInspectorUnlink}
                   onImport={handleInspectorImport}
                   onOpen={handleInspectorOpen}
+                  onIgnore={(e) => ignoredPaths.ignore(e.path)}
+                  onUnignore={ignoredPaths.unignore}
                 />
               )}
             </div>
@@ -502,6 +553,7 @@ function AppInner() {
       </div>
 
       <LogPanel entries={logs} />
+      <ScanProgressOverlay open={busy} onCancel={cancelScan} />
     </div>
   );
 }

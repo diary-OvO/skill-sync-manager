@@ -43,7 +43,14 @@ func ScanCliSkills(toolName string, sharedRoot string) ([]models.CliSkillEntry, 
 
 	out := make([]models.CliSkillEntry, 0, len(entries))
 	for _, entry := range entries {
-		full := filepath.Join(dir, entry.Name())
+		name := entry.Name()
+		// 跳过所有以 "." 开头的条目：.git / .idea / .DS_Store 等
+		// 都不是合法的 skill 文件夹，历史上却被当作 "external" 误报。
+		if strings.HasPrefix(name, ".") {
+			continue
+		}
+
+		full := filepath.Join(dir, name)
 		// 用完整路径调用 Lstat：不同 Go / Windows 版本下，
 		// DirEntry.IsDir 与 .Info 对 NTFS junction 的判定会不一致。
 		st, err := os.Lstat(full)
@@ -58,13 +65,13 @@ func ScanCliSkills(toolName string, sharedRoot string) ([]models.CliSkillEntry, 
 
 		item := models.CliSkillEntry{
 			ToolName:  toolName,
-			SkillName: entry.Name(),
+			SkillName: name,
 			Path:      full,
 			IsLink:    isLink,
 		}
 
 		// 共享根下是否存在同名 skill。
-		sharedPath, sharedExists := sharedSkillNames[entry.Name()]
+		sharedPath, sharedExists := sharedSkillNames[name]
 		if sharedExists {
 			item.SharedRootPath = sharedPath
 		}
@@ -88,9 +95,16 @@ func ScanCliSkills(toolName string, sharedRoot string) ([]models.CliSkillEntry, 
 				item.HasSkillMd = true
 			}
 			if sharedExists {
+				// 与共享根同名 —— shadowing 语义，即便它没有 SKILL.md
+				// 也要暴露给用户，方便处理遮蔽。
 				item.Kind = models.CliSkillKindShadowing
-			} else {
+			} else if item.HasSkillMd {
+				// external 必须是一个"真的像 skill"的目录，
+				// 否则 .system、design、random-folder 这类都会被误报。
 				item.Kind = models.CliSkillKindExternal
+			} else {
+				// 没有 SKILL.md、也不在共享根 —— 当非 skill 目录跳过。
+				continue
 			}
 		}
 		out = append(out, item)

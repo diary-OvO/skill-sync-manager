@@ -67,6 +67,54 @@ func TestMissingCliDirIsEmpty(t *testing.T) {
 	}
 }
 
+// 确保扫描忽略 .git / .idea 这类点前缀目录，
+// 以及那些没有 SKILL.md、在共享根也没同名的"非 skill"目录（例如 design）。
+func TestSkipDotDirsAndNonSkillFolders(t *testing.T) {
+	shared := t.TempDir()
+	fakeHome := t.TempDir()
+	t.Setenv("USERPROFILE", fakeHome)
+	t.Setenv("HOME", fakeHome)
+
+	cliDir := filepath.Join(fakeHome, ".claude", "skills")
+	if err := os.MkdirAll(cliDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// .git / .idea / .system —— 名字以点开头，直接跳过。
+	for _, dot := range []string{".git", ".idea", ".system"} {
+		if err := os.MkdirAll(filepath.Join(cliDir, dot), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// design —— 一个没有 SKILL.md、也不在共享根的普通目录；
+	// 之前版本会把它报成 external，新逻辑应该过滤掉。
+	if err := os.MkdirAll(filepath.Join(cliDir, "design"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// real-skill —— 带 SKILL.md 的正常目录，必须出现在结果里。
+	makeSkill(t, cliDir, "real-skill")
+
+	out, err := ScanCliSkills("claude", shared)
+	if err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	if len(out) != 1 {
+		names := []string{}
+		for _, e := range out {
+			names = append(names, e.SkillName)
+		}
+		t.Fatalf("expected exactly 1 entry, got %d: %v", len(out), names)
+	}
+	if out[0].SkillName != "real-skill" {
+		t.Errorf("expected real-skill, got %q", out[0].SkillName)
+	}
+	if out[0].Kind != models.CliSkillKindExternal {
+		t.Errorf("expected external, got %q", out[0].Kind)
+	}
+}
+
 func TestManagedAndStrayOnWindows(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("junctions are Windows-only")
