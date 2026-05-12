@@ -15,8 +15,10 @@ import (
 	"skill-sync-manager/internal/synctargets"
 )
 
+// BodyPreviewLimit 控制 SKILL.md 正文预览的最大字符数。
 const BodyPreviewLimit = 800
 
+// ParsedSkillMarkdown 是 ParseSkillMarkdown 的结构化返回值。
 type ParsedSkillMarkdown struct {
 	Frontmatter map[string]string
 	Body        string
@@ -26,14 +28,14 @@ type ParsedSkillMarkdown struct {
 	Errors      []string
 }
 
-// ParseSkillMarkdown reads a SKILL.md file and returns a parsed representation
-// of its simple `key: value` YAML frontmatter plus the body preview.
+// ParseSkillMarkdown 读取一份 SKILL.md，并返回其简易 `key: value` YAML
+// frontmatter 与正文预览。
 //
-// Parsing rules:
-//  1. Only files beginning with a `---` line are treated as having frontmatter.
-//  2. The frontmatter ends at the next `---` line.
-//  3. Inside the frontmatter block, only `key: value` lines are parsed.
-//  4. `name` and `description` are required; anything else is passed through.
+// 解析规则：
+//  1. 仅当文件以 `---` 行起始时，才视为带 frontmatter；
+//  2. frontmatter 在下一个 `---` 行处结束；
+//  3. frontmatter 内仅识别 `key: value` 形式的行；
+//  4. `name` 与 `description` 为必填，其余字段原样透传。
 func ParseSkillMarkdown(skillMdPath string) (ParsedSkillMarkdown, error) {
 	parsed := ParsedSkillMarkdown{
 		Frontmatter: map[string]string{},
@@ -45,9 +47,8 @@ func ParseSkillMarkdown(skillMdPath string) (ParsedSkillMarkdown, error) {
 		return parsed, nil
 	}
 
-	text := string(data)
-	// Normalize line endings so splitting by "\n" is stable on Windows.
-	text = strings.ReplaceAll(text, "\r\n", "\n")
+	// 统一换行，Windows 下按 "\n" 切分才稳定。
+	text := strings.ReplaceAll(string(data), "\r\n", "\n")
 
 	var body string
 	if strings.HasPrefix(text, "---\n") {
@@ -62,7 +63,7 @@ func ParseSkillMarkdown(skillMdPath string) (ParsedSkillMarkdown, error) {
 			body = rest[bodyStart:]
 			parseFrontmatterLines(fm, parsed.Frontmatter)
 		} else {
-			// Unterminated frontmatter — treat whole file as body and record a warning.
+			// frontmatter 未被 `---` 闭合：整个文件当作正文，同时记录一条警告。
 			parsed.Errors = append(parsed.Errors, "Frontmatter block was not closed with '---'")
 			body = text
 		}
@@ -80,8 +81,8 @@ func ParseSkillMarkdown(skillMdPath string) (ParsedSkillMarkdown, error) {
 		parsed.Errors = append(parsed.Errors, "Frontmatter is missing required field: description")
 	}
 
-	trimmed := strings.TrimLeft(body, " \t\r\n")
 	parsed.Body = body
+	trimmed := strings.TrimSpace(body)
 	if len(trimmed) > BodyPreviewLimit {
 		parsed.BodyPreview = trimmed[:BodyPreviewLimit]
 	} else {
@@ -91,14 +92,15 @@ func ParseSkillMarkdown(skillMdPath string) (ParsedSkillMarkdown, error) {
 	return parsed, nil
 }
 
+// parseFrontmatterLines 将 frontmatter 区块按行写入 out。
+// 只识别 `key: value` 形式；注释行（`#` 开头）与空行会被跳过。
 func parseFrontmatterLines(block string, out map[string]string) {
 	for _, rawLine := range strings.Split(block, "\n") {
 		line := strings.TrimRight(rawLine, " \t\r")
 		if line == "" {
 			continue
 		}
-		trimmed := strings.TrimLeft(line, " \t")
-		if strings.HasPrefix(trimmed, "#") {
+		if strings.HasPrefix(strings.TrimLeft(line, " \t"), "#") {
 			continue
 		}
 		colon := strings.IndexByte(line, ':')
@@ -106,15 +108,14 @@ func parseFrontmatterLines(block string, out map[string]string) {
 			continue
 		}
 		key := strings.TrimSpace(line[:colon])
-		value := strings.TrimSpace(line[colon+1:])
-		value = stripSurroundingQuotes(value)
 		if key == "" {
 			continue
 		}
-		out[key] = value
+		out[key] = stripSurroundingQuotes(strings.TrimSpace(line[colon+1:]))
 	}
 }
 
+// stripSurroundingQuotes 移除字符串首尾成对的单/双引号。
 func stripSurroundingQuotes(s string) string {
 	if len(s) >= 2 {
 		if (s[0] == '"' && s[len(s)-1] == '"') || (s[0] == '\'' && s[len(s)-1] == '\'') {
@@ -124,9 +125,9 @@ func stripSurroundingQuotes(s string) string {
 	return s
 }
 
-// ScanSkills walks the first level of `root` and returns every subdirectory
-// that contains a SKILL.md. Registry metadata (origin/hidden/frozen) is
-// merged in. The .skill-manager folder is skipped.
+// ScanSkills 遍历 root 的直接子目录，返回所有包含 SKILL.md 的项，
+// 并合并注册表中的 origin / hidden / frozen 信息。
+// `.skill-manager` 目录会被跳过。
 func ScanSkills(root string) ([]models.SkillInfo, error) {
 	if root == "" {
 		return []models.SkillInfo{}, nil
@@ -146,10 +147,7 @@ func ScanSkills(root string) ([]models.SkillInfo, error) {
 	results := make([]models.SkillInfo, 0, len(entries))
 	seen := map[string]bool{}
 	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		if entry.Name() == registry.DirName {
+		if !entry.IsDir() || entry.Name() == registry.DirName {
 			continue
 		}
 		skillDir := filepath.Join(root, entry.Name())
@@ -205,7 +203,7 @@ func ScanSkills(root string) ([]models.SkillInfo, error) {
 		seen[displayName] = true
 	}
 
-	// Prune registry entries for skills that no longer exist on disk.
+	// 清理注册表中已经不存在于磁盘上的 skill 条目。
 	if reg.PruneMissing(seen) > 0 {
 		_ = registry.Save(root, reg)
 	}
@@ -216,18 +214,15 @@ func ScanSkills(root string) ([]models.SkillInfo, error) {
 	return results, nil
 }
 
-// ImportSkillFolder copies an external skill directory into `root`, using the
-// frontmatter `name` as the target folder name. Existing targets are never
-// overwritten.
+// ImportSkillFolder 将一个外部 skill 目录复制进 root，
+// 目标子目录名使用 frontmatter 中的 `name`。已存在的目标不会被覆盖。
 func ImportSkillFolder(source string, root string) (models.SkillInfo, error) {
 	var zero models.SkillInfo
 
-	srcInfo, err := os.Stat(source)
-	if err != nil || !srcInfo.IsDir() {
+	if srcInfo, err := os.Stat(source); err != nil || !srcInfo.IsDir() {
 		return zero, fmt.Errorf("source is not a directory: %s", source)
 	}
-	rootInfo, err := os.Stat(root)
-	if err != nil || !rootInfo.IsDir() {
+	if rootInfo, err := os.Stat(root); err != nil || !rootInfo.IsDir() {
 		return zero, fmt.Errorf("shared skill root does not exist: %s", root)
 	}
 
@@ -242,28 +237,43 @@ func ImportSkillFolder(source string, root string) (models.SkillInfo, error) {
 	}
 
 	targetDir := filepath.Join(root, parsed.Name)
-	if _, err := os.Lstat(targetDir); err == nil {
-		return zero, fmt.Errorf(
-			"target already exists at %s. Remove it manually or rename the skill.",
-			targetDir,
-		)
-	} else if !os.IsNotExist(err) {
-		return zero, fmt.Errorf("failed to stat target %s: %v", targetDir, err)
+	if err := ensureTargetAbsent(targetDir, "Remove it manually or rename the skill."); err != nil {
+		return zero, err
 	}
 
 	if err := copyDirectory(source, targetDir); err != nil {
 		return zero, fmt.Errorf("failed to copy skill: %v", err)
 	}
 
+	return rescanSkill(root, targetDir)
+}
+
+// ensureTargetAbsent 确认目标路径不存在，便于"从不覆盖"的策略。
+// hint 会追加到用户可见的错误信息后，提示后续操作。
+func ensureTargetAbsent(targetDir, hint string) error {
+	_, err := os.Lstat(targetDir)
+	if err == nil {
+		return fmt.Errorf("target already exists at %s. %s", targetDir, hint)
+	}
+	if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to stat target %s: %v", targetDir, err)
+	}
+	return nil
+}
+
+// rescanSkill 在 root 下重新扫描，返回与 targetDir 对应的那条 SkillInfo。
+// 用于导入成功后把最新状态回传给前端。
+func rescanSkill(root, targetDir string) (models.SkillInfo, error) {
 	scanned, _ := ScanSkills(root)
 	for _, s := range scanned {
 		if s.Path == targetDir {
 			return s, nil
 		}
 	}
-	return zero, fmt.Errorf("imported folder could not be scanned back: %s", targetDir)
+	return models.SkillInfo{}, fmt.Errorf("imported folder could not be scanned back: %s", targetDir)
 }
 
+// copyDirectory 递归复制目录，但会跳过 `.git` 与符号链接等非常规文件。
 func copyDirectory(src, dest string) error {
 	if err := os.MkdirAll(dest, 0o755); err != nil {
 		return err
@@ -273,8 +283,7 @@ func copyDirectory(src, dest string) error {
 		return err
 	}
 	for _, entry := range entries {
-		// Never copy `.git` — importing an external skill must not drag a
-		// sibling Git history into the shared skill repo.
+		// 永远不复制 `.git`：导入外部 skill 不应把它的 git 历史带进来。
 		if entry.Name() == ".git" {
 			continue
 		}
@@ -293,8 +302,7 @@ func copyDirectory(src, dest string) error {
 			if err := copyFile(srcPath, destPath); err != nil {
 				return err
 			}
-		default:
-			// Skip symlinks, sockets, pipes — only plain files belong in a skill.
+			// 其它类型（符号链接、管道、套接字等）不属于 skill 内容，直接跳过。
 		}
 	}
 	return nil
@@ -311,20 +319,16 @@ func copyFile(src, dest string) error {
 		return err
 	}
 	defer out.Close()
-	if _, err := io.Copy(out, in); err != nil {
-		return err
-	}
-	return nil
+	_, err = io.Copy(out, in)
+	return err
 }
 
-// ImportFromCli copies a real skill directory that currently lives inside
-// a CLI tool's skills folder into the shared root, and records its origin
-// in the registry. The CLI-side copy is NOT modified — the caller can
-// decide whether to delete it and reroute via a junction.
+// ImportFromCli 把某个 CLI 工具（例如 Claude / Codex）skills 目录下
+// 已经存在的真实 skill 目录复制进共享根，并在注册表中记录其来源。
+// CLI 原始目录不会被动到，是否删除并改用 junction 由调用方决定。
 //
-// `origin` must be "owned" or "vendored"; any other value is normalized
-// to "vendored" on the assumption that skills pre-existing in a CLI dir
-// most often came from somewhere external.
+// `origin` 必须为 "owned" 或 "vendored"；其它值都会被规范为 "vendored"
+// ——CLI 目录中原本存在的 skill 更可能是从外部引入的。
 func ImportFromCli(toolName string, cliSkillName string, sharedRoot string, origin models.SkillOrigin) (models.SkillInfo, error) {
 	var zero models.SkillInfo
 	if cliSkillName == "" {
@@ -333,8 +337,7 @@ func ImportFromCli(toolName string, cliSkillName string, sharedRoot string, orig
 	if sharedRoot == "" {
 		return zero, fmt.Errorf("shared root must not be empty")
 	}
-	rootInfo, err := os.Stat(sharedRoot)
-	if err != nil || !rootInfo.IsDir() {
+	if rootInfo, err := os.Stat(sharedRoot); err != nil || !rootInfo.IsDir() {
 		return zero, fmt.Errorf("shared skill root does not exist: %s", sharedRoot)
 	}
 
@@ -344,8 +347,8 @@ func ImportFromCli(toolName string, cliSkillName string, sharedRoot string, orig
 	}
 	source := filepath.Join(cliDir, cliSkillName)
 
-	// Only import real directories. A junction already implies the skill
-	// is managed from the shared root, so importing would be a duplicate.
+	// 只导入真实目录。若已是 junction，则说明该 skill 本就由共享根托管，
+	// 再导入会造成重复。
 	if symlinkwindows.IsLinkPath(source) {
 		return zero, fmt.Errorf(
 			"%s is a junction/symlink, not a standalone skill. Nothing to import.",
@@ -364,29 +367,26 @@ func ImportFromCli(toolName string, cliSkillName string, sharedRoot string, orig
 	parsed, _ := ParseSkillMarkdown(skillMd)
 	targetName := parsed.Name
 	if targetName == "" {
-		// Fall back to the folder name if frontmatter is incomplete.
+		// frontmatter 不完整时退回用文件夹名。
 		targetName = cliSkillName
 	}
 
 	targetDir := filepath.Join(sharedRoot, targetName)
-	if _, err := os.Lstat(targetDir); err == nil {
-		return zero, fmt.Errorf(
-			"target already exists at %s. Rename the CLI skill or remove the existing entry before importing.",
-			targetDir,
-		)
-	} else if !os.IsNotExist(err) {
-		return zero, fmt.Errorf("failed to stat target %s: %v", targetDir, err)
+	if err := ensureTargetAbsent(
+		targetDir,
+		"Rename the CLI skill or remove the existing entry before importing.",
+	); err != nil {
+		return zero, err
 	}
 
 	if err := copyDirectory(source, targetDir); err != nil {
 		return zero, fmt.Errorf("failed to copy skill: %v", err)
 	}
 
-	// Normalize origin. Empty / unknown values become vendored because the
-	// skill came from outside the shared root.
+	// 规范化 origin。空值或未知值统一视为 vendored，因为这个 skill 来自共享根之外。
 	switch origin {
 	case models.SkillOriginOwned, models.SkillOriginVendored:
-		// ok
+		// 合法值，保持不变
 	default:
 		origin = models.SkillOriginVendored
 	}
@@ -398,17 +398,10 @@ func ImportFromCli(toolName string, cliSkillName string, sharedRoot string, orig
 		ImportedAtUnix: time.Now().Unix(),
 	})
 	if err := registry.Save(sharedRoot, reg); err != nil {
-		// Don't roll back the copy — the skill is on disk and valid. Just
-		// surface the registry write error so the UI can tell the user the
-		// metadata didn't persist.
+		// 不回滚已复制的文件：skill 已经落盘且合法。
+		// 仅把注册表写入失败的信息抛给上层，让 UI 告知用户元数据未持久化。
 		return zero, fmt.Errorf("skill copied but registry write failed: %v", err)
 	}
 
-	scanned, _ := ScanSkills(sharedRoot)
-	for _, s := range scanned {
-		if s.Path == targetDir {
-			return s, nil
-		}
-	}
-	return zero, fmt.Errorf("imported folder could not be scanned back: %s", targetDir)
+	return rescanSkill(sharedRoot, targetDir)
 }

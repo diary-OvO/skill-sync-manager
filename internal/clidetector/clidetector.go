@@ -8,9 +8,9 @@ import (
 	"skill-sync-manager/internal/models"
 )
 
-// DetectCliTools checks for each CLI agent on PATH using `where` on Windows
-// and `which` elsewhere. Returns one ToolStatus per tool in the well-known
-// list (claude, codex, gemini, opencode, hermes).
+// DetectCliTools 检查 PATH 中是否存在各个 CLI agent。
+// Windows 下使用 `where`，其他系统使用 `which`。
+// 返回列表与 models.AllTools() 一一对应（claude、codex、gemini、opencode、hermes）。
 func DetectCliTools() []models.ToolStatus {
 	tools := models.AllTools()
 	results := make([]models.ToolStatus, 0, len(tools))

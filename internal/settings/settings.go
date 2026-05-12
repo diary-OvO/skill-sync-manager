@@ -9,8 +9,9 @@ import (
 	"skill-sync-manager/internal/models"
 )
 
-// SettingsPath returns the absolute path to settings.json under
-// %APPDATA%\skill-sync-manager, falling back to ~/.skill-sync-manager.
+// SettingsPath 返回 settings.json 的绝对路径。
+// 默认放在 %APPDATA%\skill-sync-manager 下，若 APPDATA 未设置，
+// 则退回 ~/.skill-sync-manager 目录。
 func SettingsPath() (string, error) {
 	if appdata := os.Getenv("APPDATA"); appdata != "" {
 		return filepath.Join(appdata, "skill-sync-manager", "settings.json"), nil
@@ -22,9 +23,9 @@ func SettingsPath() (string, error) {
 	return filepath.Join(home, ".skill-sync-manager", "settings.json"), nil
 }
 
-// LoadSettings returns the persisted AppSettings, or a zero-value struct
-// (not an error) if the file doesn't exist or can't be parsed. Callers treat
-// "no settings" as a normal startup state.
+// LoadSettings 返回已持久化的 AppSettings。
+// 文件不存在或无法解析时，返回零值结构体（不是错误）：
+// 调用方把"没有设置"视为正常的启动状态。
 func LoadSettings() (models.AppSettings, error) {
 	path, err := SettingsPath()
 	if err != nil {

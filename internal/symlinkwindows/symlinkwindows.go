@@ -9,29 +9,28 @@ import (
 	"strings"
 )
 
+// windowsJunctionHint 在创建 junction 失败时附加给用户，给出常见的排查思路。
 const windowsJunctionHint = "Creating a directory junction on Windows can fail without sufficient permissions. " +
 	"Try enabling Developer Mode in Windows Settings, re-run Skill Sync Manager as administrator, " +
 	"or verify the target path exists on an NTFS volume."
 
-// IsWindows returns true when the current process is running on Windows.
+// IsWindows 判断当前进程是否运行在 Windows 平台。
 func IsWindows() bool {
 	return runtime.GOOS == "windows"
 }
 
-// PathExists returns true if something (file, dir, link) exists at p.
+// PathExists 判断路径 p 上是否存在任何实体（文件 / 目录 / 链接）。
 func PathExists(p string) bool {
 	_, err := os.Lstat(p)
 	return err == nil
 }
 
-// IsLinkPath reports whether p is a symlink or directory junction.
-// On Windows, Go's treatment of NTFS directory junctions has changed
-// across versions. We try three signals in order:
-//  1. Lstat mode bits (ModeSymlink and/or ModeIrregular/reparse bits).
-//  2. os.Readlink success — a plain directory returns an error.
-//  3. EvalSymlinks difference — resolved path differs from the input.
-//
-// Any single positive signal is enough.
+// IsLinkPath 判断 p 是否为符号链接或目录 junction。
+// Go 在不同版本下对 NTFS 目录 junction 的处理略有差异，这里依次尝试三种信号，
+// 只要其中任意一种命中即视为链接：
+//  1. Lstat 返回的 mode 位（ModeSymlink / 反解点位）；
+//  2. os.Readlink 能成功：普通目录会返回错误；
+//  3. EvalSymlinks 解析出的路径与输入不同。
 func IsLinkPath(p string) bool {
 	st, err := os.Lstat(p)
 	if err != nil {
@@ -40,13 +39,12 @@ func IsLinkPath(p string) bool {
 	if st.Mode()&os.ModeSymlink != 0 {
 		return true
 	}
-	// On some Go/Windows combinations, junctions come back as regular
-	// directories from Lstat. Readlink, however, will succeed for a
-	// junction and return its target; for a plain directory it errors.
+	// 在部分 Go / Windows 组合下，junction 在 Lstat 里表现为普通目录，
+	// 但 Readlink 仍能读到 NTFS 反解点并返回目标；普通目录会返回错误。
 	if _, err := os.Readlink(p); err == nil {
 		return true
 	}
-	// Last-resort probe.
+	// 兜底探测：解析出的路径若与输入不同，即可视为链接。
 	abs, err := filepath.Abs(p)
 	if err != nil {
 		return false
@@ -55,19 +53,15 @@ func IsLinkPath(p string) bool {
 	if err != nil {
 		return false
 	}
-	if strings.EqualFold(filepath.Clean(resolved), filepath.Clean(abs)) {
-		return false
-	}
-	return true
+	return !strings.EqualFold(filepath.Clean(resolved), filepath.Clean(abs))
 }
 
-// ResolveRealPath returns the absolute path a junction or symlink points to.
-// For a plain directory, it returns the absolute path of that directory.
+// ResolveRealPath 返回 junction / 符号链接所指向的真实绝对路径；
+// 若 p 是普通目录，则返回它自己的绝对路径。
 //
-// On Windows, Go's filepath.EvalSymlinks sometimes does not traverse
-// directory junctions cleanly (it may return the link path itself). We
-// therefore try os.Readlink first when the entry is a link — that
-// reads the NTFS reparse point directly and returns the raw target.
+// 在 Windows 下，Go 的 filepath.EvalSymlinks 对目录 junction 的处理并不总是
+// 可靠（有时直接返回链接自身）。因此对链接类型优先使用 os.Readlink，
+// 它会直接读取 NTFS 反解点的原始目标。
 func ResolveRealPath(p string) (string, error) {
 	abs, err := filepath.Abs(p)
 	if err != nil {
@@ -91,8 +85,8 @@ func ResolveRealPath(p string) (string, error) {
 	return filepath.Clean(resolved), nil
 }
 
-// CreateDirectoryJunction creates an NTFS directory junction at linkPath that
-// points to targetPath. Windows-only. Never overwrites an existing path.
+// CreateDirectoryJunction 在 linkPath 创建一个指向 targetPath 的 NTFS 目录 junction。
+// 仅支持 Windows；绝不会覆盖已经存在的路径。
 func CreateDirectoryJunction(linkPath string, targetPath string) error {
 	if !IsWindows() {
 		return fmt.Errorf(
@@ -110,7 +104,7 @@ func CreateDirectoryJunction(linkPath string, targetPath string) error {
 		return fmt.Errorf("failed to resolve link path: %v", err)
 	}
 
-	// The target must exist and be a directory.
+	// 目标必须存在且为目录。
 	st, err := os.Stat(absTarget)
 	if err != nil || !st.IsDir() {
 		return fmt.Errorf("target directory does not exist: %s", absTarget)
@@ -135,7 +129,7 @@ func CreateDirectoryJunction(linkPath string, targetPath string) error {
 			absLink, absTarget, err.Error(), strings.TrimSpace(string(out)), windowsJunctionHint,
 		)
 	}
-	// Sanity check that mklink actually produced a link.
+	// 再校验一次 mklink 的输出：确实生成了链接才返回成功。
 	if !IsLinkPath(absLink) {
 		return fmt.Errorf(
 			"mklink appeared to succeed but %s does not look like a junction. %s",

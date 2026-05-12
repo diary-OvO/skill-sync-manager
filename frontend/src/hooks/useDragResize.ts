@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-// Persist to localStorage with graceful fallback; returns [value, setter].
+// 将状态持久化到 localStorage，并在读写失败时优雅降级；返回 [value, setter]。
 function useStoredState<T>(key: string, initial: T, parse: (raw: string) => T | null) {
   const [value, setValue] = useState<T>(() => {
     try {
@@ -16,36 +16,62 @@ function useStoredState<T>(key: string, initial: T, parse: (raw: string) => T | 
     try {
       localStorage.setItem(key, JSON.stringify(value));
     } catch {
-      /* ignore quota / private-mode */
+      /* 忽略配额、隐私模式等写入失败 */
     }
   }, [key, value]);
   return [value, setValue] as const;
 }
 
-// --- Vertical split (two stacked panels, drag handle in between) ---
+// 统一处理"全局鼠标拖拽"的副作用：在 enabled 为 true 期间监听
+// mousemove / mouseup，并临时替换 body 的 cursor / userSelect，
+// 在结束时恢复原值。useAxialSplit 与 useColumnResize 共用。
+function useGlobalMouseDrag(
+  enabled: boolean,
+  cursor: string,
+  handlers: { onMove: (e: MouseEvent) => void; onEnd: () => void },
+) {
+  const { onMove, onEnd } = handlers;
+  useEffect(() => {
+    if (!enabled) return;
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onEnd);
+    const prevUserSelect = document.body.style.userSelect;
+    const prevCursor = document.body.style.cursor;
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = cursor;
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onEnd);
+      document.body.style.userSelect = prevUserSelect;
+      document.body.style.cursor = prevCursor;
+    };
+  }, [enabled, cursor, onMove, onEnd]);
+}
+
+// --- 上下分栏（两个纵向面板，中间有拖拽条） ---
 
 export interface VerticalSplitState {
-  /** Height in px of the top panel. */
+  /** 顶部面板的像素高度。 */
   topHeight: number;
-  /** Ref attached to the container whose height we measure. */
+  /** 绑定到容器的 ref，用来读取容器尺寸。 */
   containerRef: React.RefObject<HTMLDivElement>;
-  /** Mouse-down handler for the split handle. */
+  /** 分栏拖拽条的 mousedown 处理器。 */
   onHandleMouseDown: (e: React.MouseEvent) => void;
-  /** Whether the user is currently dragging. */
+  /** 用户是否正在拖拽。 */
   dragging: boolean;
 }
 
 export interface HorizontalSplitState {
-  /** Width in px of the left panel. */
+  /** 左侧面板的像素宽度。 */
   leftWidth: number;
   containerRef: React.RefObject<HTMLDivElement>;
   onHandleMouseDown: (e: React.MouseEvent) => void;
   dragging: boolean;
 }
 
-// Shared kernel: tracks "size of the first pane" along an axis, pinned to
-// [minFirst, containerSize - minSecond]. `axis` picks which dimension to
-// measure; everything else is the same between vertical and horizontal splits.
+// 共用内核：沿某个轴追踪"第一块面板的尺寸"，并约束在
+// [minFirst, containerSize - minSecond] 区间内。axis 决定度量的维度，
+// 垂直 / 水平分栏的其余逻辑完全一致。
 function useAxialSplit(
   axis: "vertical" | "horizontal",
   storageKey: string,
@@ -75,43 +101,32 @@ function useAxialSplit(
     [axis, firstSize],
   );
 
-  useEffect(() => {
-    if (!dragging) return;
-    const onMove = (e: MouseEvent) => {
+  const onMove = useCallback(
+    (e: MouseEvent) => {
       const container = containerRef.current;
       if (!container) return;
       const rect = container.getBoundingClientRect();
       const pointer = axis === "vertical" ? e.clientY : e.clientX;
       const span = axis === "vertical" ? rect.height : rect.width;
       const delta = pointer - dragStart.current;
-      let next = dragStartFirst.current + delta;
       const max = Math.max(minFirst, span - minSecond);
+      let next = dragStartFirst.current + delta;
       if (next < minFirst) next = minFirst;
       if (next > max) next = max;
       setFirstSize(next);
-    };
-    const onUp = () => setDragging(false);
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    // Prevent text selection + swap the cursor globally so it doesn't flicker
-    // when the pointer leaves the handle during a fast drag.
-    const prevUserSelect = document.body.style.userSelect;
-    const prevCursor = document.body.style.cursor;
-    document.body.style.userSelect = "none";
-    document.body.style.cursor = axis === "vertical" ? "row-resize" : "col-resize";
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-      document.body.style.userSelect = prevUserSelect;
-      document.body.style.cursor = prevCursor;
-    };
-  }, [axis, dragging, minFirst, minSecond, setFirstSize]);
+    },
+    [axis, minFirst, minSecond, setFirstSize],
+  );
+  const onEnd = useCallback(() => setDragging(false), []);
+  // 禁用文本选择 + 全局替换光标，避免快速拖拽时指针离开拖拽条造成光标闪烁。
+  useGlobalMouseDrag(dragging, axis === "vertical" ? "row-resize" : "col-resize", {
+    onMove,
+    onEnd,
+  });
 
-  // Re-clamp `firstSize` whenever the container shrinks below a size that
-  // could still accommodate [minFirst, span - minSecond]. Without this, a
-  // leftWidth of 560 persisted from a wide window would push the right pane
-  // off-screen on a narrow window. Also runs once on mount in case the stored
-  // value is stale relative to the current viewport.
+  // 当容器缩小到 [minFirst, span - minSecond] 已经容纳不下时，重新对 firstSize 做 clamp。
+  // 否则在宽窗口下存的 leftWidth=560 会在窄窗口里把右侧面板推出视口。
+  // 同时在挂载时运行一次，用来修正与当前视口不匹配的历史存储值。
   useEffect(() => {
     const container = containerRef.current;
     if (!container || typeof ResizeObserver === "undefined") return;
@@ -131,7 +146,7 @@ function useAxialSplit(
       }
     });
     ro.observe(container);
-    // Initial clamp using whatever size the container has right now.
+    // 使用容器当前的实际尺寸做一次初始 clamp。
     const rect = container.getBoundingClientRect();
     clampTo(axis === "vertical" ? rect.height : rect.width);
     return () => ro.disconnect();
@@ -174,14 +189,14 @@ export function useHorizontalSplit(
   };
 }
 
-// --- Column resize (per-column px widths, drag handle on each th) ---
+// --- 表格列宽拖拽（每列独立像素宽度，表头上各有一个拖拽条） ---
 
 export type ColumnWidths = Record<string, number>;
 
 export interface ColumnResizeState {
   widths: ColumnWidths;
   reset: () => void;
-  /** Returns a mouse-down handler bound to `columnKey`. */
+  /** 返回一个绑定到 columnKey 的 mousedown 处理器。 */
   startResize: (columnKey: string) => (e: React.MouseEvent) => void;
   dragging: string | null;
 }
@@ -212,7 +227,7 @@ export function useColumnResize(
     },
   );
 
-  // If `defaults` gains new keys (new column added), merge them in.
+  // 当 defaults 新增了键（例如新加了一列），把它合并进现有的宽度 map。
   useEffect(() => {
     setWidths((prev) => {
       let changed = false;
@@ -242,27 +257,17 @@ export function useColumnResize(
     [widths, defaults],
   );
 
-  useEffect(() => {
-    if (!dragging) return;
-    const onMove = (e: MouseEvent) => {
+  const onMove = useCallback(
+    (e: MouseEvent) => {
+      if (!dragging) return;
       const delta = e.clientX - dragStartX.current;
       const next = Math.max(minWidth, dragStartW.current + delta);
       setWidths((prev) => ({ ...prev, [dragging]: next }));
-    };
-    const onUp = () => setDragging(null);
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    const prevUserSelect = document.body.style.userSelect;
-    document.body.style.userSelect = "none";
-    const prevCursor = document.body.style.cursor;
-    document.body.style.cursor = "col-resize";
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-      document.body.style.userSelect = prevUserSelect;
-      document.body.style.cursor = prevCursor;
-    };
-  }, [dragging, minWidth, setWidths]);
+    },
+    [dragging, minWidth, setWidths],
+  );
+  const onEnd = useCallback(() => setDragging(null), []);
+  useGlobalMouseDrag(dragging !== null, "col-resize", { onMove, onEnd });
 
   const reset = useCallback(() => setWidths(defaults), [defaults, setWidths]);
 

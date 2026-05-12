@@ -26,15 +26,14 @@ func main() {
 		},
 		BackgroundColour: &options.RGBA{R: 246, G: 247, B: 249, A: 1},
 		OnStartup:        app.startup,
-		// OnBeforeClose fires when the user triggers window close (X button,
-		// Alt-F4, OS close). Returning false from the hook lets the close
-		// proceed. Returning true would veto it — we don't, because the
-		// project policy is "X means quit".
+		// OnBeforeClose 在用户触发窗口关闭（X 按钮、Alt-F4、OS 菜单）时触发。
+		// 钩子返回 false 表示允许关闭，返回 true 则会否决。
+		// 本项目的策略是"点 X 就退出"，因此一律放行。
 		OnBeforeClose: app.onBeforeClose,
-		// OnShutdown fires after the window is gone, right before wails.Run
-		// returns. Last-chance cleanup for any exit path (user close, JS
-		// QuitApp call, OS signal in the future). runShutdown is idempotent,
-		// so double-firing with OnBeforeClose is harmless.
+		// OnShutdown 在窗口销毁之后、wails.Run 返回之前触发，
+		// 是所有退出路径（X 按钮、前端调用 QuitApp、未来的 OS 信号）
+		// 共同的兜底清理点。runShutdown 是幂等的，与 OnBeforeClose
+		// 重复触发也不会有副作用。
 		OnShutdown: app.onShutdown,
 		Bind: []interface{}{
 			app,

@@ -1,5 +1,6 @@
 package models
 
+// SyncState 表示某个 skill 在某个目标工具下的同步状态。
 type SyncState string
 
 const (
@@ -11,9 +12,8 @@ const (
 	SyncStateError       SyncState = "error"
 )
 
-// SkillOrigin distinguishes skills the user maintains themselves (owned)
-// from skills brought in from elsewhere (vendored) — e.g. downloaded,
-// cloned from another repo, or imported from a CLI tool's existing dir.
+// SkillOrigin 区分用户自有（owned）与外部引入（vendored）的 skill。
+// 例如从其他仓库 clone、从 CLI 工具目录导入的都属于 vendored。
 type SkillOrigin string
 
 const (
@@ -31,8 +31,8 @@ type SkillInfo struct {
 	Frontmatter map[string]string `json:"frontmatter"`
 	BodyPreview string            `json:"bodyPreview"`
 
-	// Registry-derived fields. Defaults when no registry entry exists:
-	// Origin = owned, Hidden = false, Frozen = false.
+	// 注册表中读取的字段。若注册表中无对应条目，默认值为：
+	// Origin = owned、Hidden = false、Frozen = false。
 	Origin         SkillOrigin `json:"origin"`
 	Hidden         bool        `json:"hidden"`
 	Frozen         bool        `json:"frozen"`
@@ -75,26 +75,26 @@ type LogEntry struct {
 	Message   string `json:"message"`
 }
 
-// CliSkillKind classifies what exists at a CLI tool's skills directory
-// entry relative to the user's shared skill root.
+// CliSkillKind 用于在扫描 CLI 工具的 skills 目录时，
+// 对每一项相对于共享根目录的关系进行分类。
 type CliSkillKind string
 
 const (
-	// Managed: the entry is a junction/symlink pointing at the matching
-	// skill inside the shared root. Equivalent to SyncStateSynced.
+	// Managed：该条目是一个 junction/symlink，且指向共享根下同名的 skill。
+	// 等价于 SyncStateSynced。
 	CliSkillKindManaged CliSkillKind = "managed"
-	// StrayLink: the entry is a junction/symlink pointing somewhere that
-	// is not our shared root skill. Not safe to auto-fix.
+	// StrayLink：该条目是 junction/symlink，但指向的目标不是共享根的 skill。
+	// 不安全，不会自动修复。
 	CliSkillKindStrayLink CliSkillKind = "stray-link"
-	// Shadowing: the entry is a real directory AND a skill with the same
-	// name exists in the shared root. This is the usual conflict cause.
+	// Shadowing：该条目是一个真实目录，并且共享根下存在同名 skill。
+	// 这通常是冲突的来源。
 	CliSkillKindShadowing CliSkillKind = "shadowing"
-	// External: the entry is a real directory with no matching skill in
-	// the shared root — a foreign skill that the user may want to import.
+	// External：该条目是真实目录，且共享根下没有同名 skill，
+	// 属于外部 skill，用户可能希望将其导入共享根。
 	CliSkillKindExternal CliSkillKind = "external"
 )
 
-// CliSkillEntry is one row in a CLI-side scan (Claude or Codex).
+// CliSkillEntry 表示 Claude 或 Codex 等 CLI 工具的 skills 目录扫描结果中的一行。
 type CliSkillEntry struct {
 	ToolName   string       `json:"toolName"`
 	SkillName  string       `json:"skillName"`
@@ -102,11 +102,11 @@ type CliSkillEntry struct {
 	Kind       CliSkillKind `json:"kind"`
 	IsLink     bool         `json:"isLink"`
 	LinkTarget string       `json:"linkTarget,omitempty"`
-	// HasSkillMd indicates whether Path/SKILL.md was found when the entry
-	// is a real directory. Helpful for the UI to warn about bare folders.
+	// HasSkillMd：当条目为真实目录时，标记 Path/SKILL.md 是否存在。
+	// 便于前端对"空壳目录"进行提示。
 	HasSkillMd bool `json:"hasSkillMd"`
-	// Set when the entry corresponds (by name) to an existing shared-root
-	// skill. Useful for the UI to cross-reference.
+	// SharedRootPath：若条目（按名称）对应共享根下某个已存在的 skill，
+	// 则填入其路径，便于前端交叉引用。
 	SharedRootPath string `json:"sharedRootPath,omitempty"`
 }
 

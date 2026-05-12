@@ -37,58 +37,54 @@ import type {
   ToolStatus,
 } from "../types";
 
+// Wails 代码生成侧的返回类型带有它自己的类命名空间（main.xxx），
+// 与前端 types.ts 中的 interface 结构一致但名称不同。
+// 为避免在每个调用里重复写 `as unknown as Promise<T>`，
+// 这里用一个泛型小工具统一做桥接。
+const bridge = <T,>(p: unknown): Promise<T> => p as Promise<T>;
+
 export const wailsApi = {
-  loadSettings: (): Promise<AppSettings> =>
-    LoadSettings() as unknown as Promise<AppSettings>,
+  loadSettings: (): Promise<AppSettings> => bridge(LoadSettings()),
   saveSettings: (settings: AppSettings): Promise<void> =>
-    SaveSettings(settings as any) as unknown as Promise<void>,
-  selectRootFolder: (): Promise<string> =>
-    SelectRootFolder() as unknown as Promise<string>,
-  selectSkillFolder: (): Promise<string> =>
-    SelectSkillFolder() as unknown as Promise<string>,
-  openPath: (path: string): Promise<void> =>
-    OpenPath(path) as unknown as Promise<void>,
-  scanSkills: (root: string): Promise<SkillInfo[]> =>
-    ScanSkills(root) as unknown as Promise<SkillInfo[]>,
+    bridge(SaveSettings(settings as never)),
+  selectRootFolder: (): Promise<string> => bridge(SelectRootFolder()),
+  selectSkillFolder: (): Promise<string> => bridge(SelectSkillFolder()),
+  openPath: (path: string): Promise<void> => bridge(OpenPath(path)),
+  scanSkills: (root: string): Promise<SkillInfo[]> => bridge(ScanSkills(root)),
   importSkillFolder: (source: string, root: string): Promise<SkillInfo> =>
-    ImportSkillFolder(source, root) as unknown as Promise<SkillInfo>,
-  detectCliTools: (): Promise<ToolStatus[]> =>
-    DetectCliTools() as unknown as Promise<ToolStatus[]>,
-  getGitStatus: (root: string): Promise<GitStatus> =>
-    GetGitStatus(root) as unknown as Promise<GitStatus>,
+    bridge(ImportSkillFolder(source, root)),
+  detectCliTools: (): Promise<ToolStatus[]> => bridge(DetectCliTools()),
+  getGitStatus: (root: string): Promise<GitStatus> => bridge(GetGitStatus(root)),
   checkSyncStatus: (skill: SkillInfo, toolName: ToolName): Promise<SyncStatus> =>
-    CheckSyncStatus(skill as any, toolName) as unknown as Promise<SyncStatus>,
+    bridge(CheckSyncStatus(skill as never, toolName)),
   syncSkillToTool: (skill: SkillInfo, toolName: ToolName): Promise<SyncStatus> =>
-    SyncSkillToTool(skill as any, toolName) as unknown as Promise<SyncStatus>,
-  logHistory: (): Promise<LogEntry[]> =>
-    LogHistory() as unknown as Promise<LogEntry[]>,
+    bridge(SyncSkillToTool(skill as never, toolName)),
+  logHistory: (): Promise<LogEntry[]> => bridge(LogHistory()),
 
   scanCliTool: (toolName: SupportedTool, sharedRoot: string): Promise<CliSkillEntry[]> =>
-    ScanCliTool(toolName, sharedRoot) as unknown as Promise<CliSkillEntry[]>,
+    bridge(ScanCliTool(toolName, sharedRoot)),
   refreshSyncStatuses: (
     skills: SkillInfo[],
   ): Promise<Record<string, Record<string, SyncStatus>>> =>
-    RefreshSyncStatuses(skills as any) as unknown as Promise<
-      Record<string, Record<string, SyncStatus>>
-    >,
+    bridge(RefreshSyncStatuses(skills as never)),
   unlinkSkill: (toolName: SupportedTool, skillName: string): Promise<void> =>
-    UnlinkSkill(toolName, skillName) as unknown as Promise<void>,
+    bridge(UnlinkSkill(toolName, skillName)),
   importSkillFromCli: (
     toolName: SupportedTool,
     cliSkillName: string,
     sharedRoot: string,
     origin: SkillOrigin,
   ): Promise<SkillInfo> =>
-    ImportSkillFromCli(toolName, cliSkillName, sharedRoot, origin) as unknown as Promise<SkillInfo>,
+    bridge(ImportSkillFromCli(toolName, cliSkillName, sharedRoot, origin)),
   setSkillMetadata: (
     sharedRoot: string,
     skillName: string,
     patch: SkillMetadataPatch,
   ): Promise<RegistryEntry> =>
-    SetSkillMetadata(sharedRoot, skillName, patch as any) as unknown as Promise<RegistryEntry>,
-  getRegistry: (sharedRoot: string): Promise<Registry> =>
-    GetRegistry(sharedRoot) as unknown as Promise<Registry>,
+    bridge(SetSkillMetadata(sharedRoot, skillName, patch as never)),
+  getRegistry: (sharedRoot: string): Promise<Registry> => bridge(GetRegistry(sharedRoot)),
 
+  // 订阅后端 `log:entry` 事件；返回的函数可用于取消订阅。
   onLog(listener: (entry: LogEntry) => void): () => void {
     const unsubscribe = EventsOn("log:entry", (entry: LogEntry) => listener(entry));
     return () => {
@@ -100,18 +96,17 @@ export const wailsApi = {
     };
   },
 
-  // quitApp triggers the full shutdown pipeline on the Go side
-  // (runShutdown -> runtime.Quit). Prefer this over RuntimeQuit so any future
-  // cleanup added in runShutdown is honored.
-  quitApp: (): Promise<void> => QuitApp() as unknown as Promise<void>,
+  // quitApp 会走 Go 端完整的关闭流水线（runShutdown -> runtime.Quit）。
+  // 优先使用本方法，未来在 runShutdown 中新增的清理逻辑也会被执行。
+  quitApp: (): Promise<void> => bridge(QuitApp()),
 
-  // quitImmediate bypasses the Go-side pipeline and asks Wails to tear down
-  // directly. Use only when the backend is already gone or not reachable.
+  // quitImmediate 跳过 Go 端流水线，直接请求 Wails 销毁窗口。
+  // 仅当后端已不可达（例如在 vite preview 等非 Wails 环境）时才使用。
   quitImmediate: (): void => {
     try {
       RuntimeQuit();
     } catch {
-      /* runtime unavailable in non-Wails dev context (e.g. vite preview) */
+      /* 非 Wails 开发环境（如 vite preview）下 runtime 不可用 */
     }
   },
 };

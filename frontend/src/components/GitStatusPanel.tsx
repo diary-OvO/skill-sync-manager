@@ -5,9 +5,37 @@ interface Props {
   status: GitStatus | null;
 }
 
+// 单行"键 : 是/否 徽章"的小组件，统一 GitStatusPanel 中的重复结构。
+function BoolRow({
+  label,
+  value,
+  goodWhen = true,
+  yes,
+  no,
+}: {
+  label: string;
+  value: boolean;
+  /** value 等于该布尔时显示绿色徽章（ok），否则依据上下文使用 warn / bad。 */
+  goodWhen?: boolean;
+  yes: string;
+  no: string;
+}) {
+  const isGood = value === goodWhen;
+  const cls = isGood ? "ok" : goodWhen ? "warn" : "bad";
+  return (
+    <div className="status-line">
+      <span className="key">{label}</span>
+      <span className="value">
+        <span className={`badge ${cls}`}>{value ? yes : no}</span>
+      </span>
+    </div>
+  );
+}
+
 export function GitStatusPanel({ status }: Props) {
   const { t } = useLanguage();
-  const yesNo = (v: boolean) => (v ? t("git.yes") : t("git.no"));
+  const yes = t("git.yes");
+  const no = t("git.no");
 
   return (
     <div className="panel">
@@ -17,42 +45,29 @@ export function GitStatusPanel({ status }: Props) {
           <div className="empty">{t("git.none")}</div>
         ) : (
           <>
+            {/* gitAvailable: false 时用红色 bad 徽章 */}
             <div className="status-line">
               <span className="key">{t("git.available")}</span>
               <span className="value">
                 <span className={`badge ${status.gitAvailable ? "ok" : "bad"}`}>
-                  {yesNo(status.gitAvailable)}
+                  {status.gitAvailable ? yes : no}
                 </span>
               </span>
             </div>
-            <div className="status-line">
-              <span className="key">{t("git.repository")}</span>
-              <span className="value">
-                <span className={`badge ${status.isRepo ? "ok" : "warn"}`}>
-                  {yesNo(status.isRepo)}
-                </span>
-              </span>
-            </div>
+            <BoolRow label={t("git.repository")} value={status.isRepo} yes={yes} no={no} />
             <div className="status-line">
               <span className="key">{t("git.branch")}</span>
               <span className="value">{status.branch ?? "—"}</span>
             </div>
-            <div className="status-line">
-              <span className="key">{t("git.remote")}</span>
-              <span className="value">
-                <span className={`badge ${status.hasRemote ? "ok" : "warn"}`}>
-                  {yesNo(status.hasRemote)}
-                </span>
-              </span>
-            </div>
-            <div className="status-line">
-              <span className="key">{t("git.dirty")}</span>
-              <span className="value">
-                <span className={`badge ${status.dirty ? "warn" : "ok"}`}>
-                  {yesNo(status.dirty)}
-                </span>
-              </span>
-            </div>
+            <BoolRow label={t("git.remote")} value={status.hasRemote} yes={yes} no={no} />
+            {/* dirty 为 true 才是不利状态，所以 goodWhen 传 false */}
+            <BoolRow
+              label={t("git.dirty")}
+              value={status.dirty}
+              goodWhen={false}
+              yes={yes}
+              no={no}
+            />
             {status.remotes.length > 0 && (
               <div
                 className="status-line"

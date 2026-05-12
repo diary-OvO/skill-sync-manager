@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { SkillInfo, SkillOrigin, SyncStatus, ToolName } from "../types";
 import { useLanguage } from "../i18n";
 
@@ -9,6 +10,31 @@ interface Props {
     patch: { hidden?: boolean; frozen?: boolean; origin?: SkillOrigin },
   ) => void;
 }
+
+// 单行详情项：`label + 内容`，full 表示占满整行。
+function Field({
+  label,
+  full = false,
+  children,
+}: {
+  label: string;
+  full?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div className={full ? "full" : undefined}>
+      <div className="label">{label}</div>
+      <div>{children}</div>
+    </div>
+  );
+}
+
+// 等宽、可断行的路径单元，供 skillPath / claudeTarget / codexTarget 复用。
+const monoPathStyle: React.CSSProperties = {
+  fontFamily: "var(--mono)",
+  fontSize: 12,
+  wordBreak: "break-all",
+};
 
 export function SkillDetail({ skill, syncStatus, onChangeMetadata }: Props) {
   const { t } = useLanguage();
@@ -24,36 +50,31 @@ export function SkillDetail({ skill, syncStatus, onChangeMetadata }: Props) {
 
   return (
     <div className="skill-detail">
-      <div>
-        <div className="label">{t("detail.name")}</div>
-        <div>
-          <strong>{skill.name}</strong>
-        </div>
-      </div>
-      <div>
-        <div className="label">{t("detail.valid")}</div>
-        <div>
-          <span className={`badge ${skill.valid ? "ok" : "invalid"}`}>
-            {skill.valid ? t("git.yes") : t("git.no")}
-          </span>
-        </div>
-      </div>
+      <Field label={t("detail.name")}>
+        <strong>{skill.name}</strong>
+      </Field>
 
-      <div>
-        <div className="label">{t("skill.origin")}</div>
+      <Field label={t("detail.valid")}>
+        <span className={`badge ${skill.valid ? "ok" : "invalid"}`}>
+          {skill.valid ? t("git.yes") : t("git.no")}
+        </span>
+      </Field>
+
+      <Field label={t("skill.origin")}>
         <div className="metadata-origin">
           <select
             value={origin}
-            onChange={(e) => onChangeMetadata(skill, { origin: e.target.value as SkillOrigin })}
+            onChange={(e) =>
+              onChangeMetadata(skill, { origin: e.target.value as SkillOrigin })
+            }
           >
             <option value="owned">{t("origin.owned")}</option>
             <option value="vendored">{t("origin.vendored")}</option>
           </select>
         </div>
-      </div>
+      </Field>
 
-      <div>
-        <div className="label">{t("skill.hidden")} / {t("skill.frozen")}</div>
+      <Field label={`${t("skill.hidden")} / ${t("skill.frozen")}`}>
         <div className="metadata-toggles">
           <label className="toggle">
             <input
@@ -72,36 +93,24 @@ export function SkillDetail({ skill, syncStatus, onChangeMetadata }: Props) {
             <span>{t("skill.frozen")}</span>
           </label>
         </div>
-      </div>
+      </Field>
 
-      <div className="full">
-        <div className="label">{t("detail.description")}</div>
-        <div>
-          {skill.description || (
-            <span style={{ color: "var(--text-muted)" }}>{t("detail.empty_value")}</span>
-          )}
-        </div>
-      </div>
+      <Field label={t("detail.description")} full>
+        {skill.description || (
+          <span style={{ color: "var(--text-muted)" }}>{t("detail.empty_value")}</span>
+        )}
+      </Field>
 
-      <div className="full">
-        <div className="label">{t("detail.skillPath")}</div>
-        <div style={{ fontFamily: "var(--mono)", fontSize: 12, wordBreak: "break-all" }}>
-          {skill.path}
-        </div>
-      </div>
+      <Field label={t("detail.skillPath")} full>
+        <div style={monoPathStyle}>{skill.path}</div>
+      </Field>
 
-      <div>
-        <div className="label">{t("detail.claudeTarget")}</div>
-        <div style={{ fontFamily: "var(--mono)", fontSize: 12, wordBreak: "break-all" }}>
-          {claudeTarget}
-        </div>
-      </div>
-      <div>
-        <div className="label">{t("detail.codexTarget")}</div>
-        <div style={{ fontFamily: "var(--mono)", fontSize: 12, wordBreak: "break-all" }}>
-          {codexTarget}
-        </div>
-      </div>
+      <Field label={t("detail.claudeTarget")}>
+        <div style={monoPathStyle}>{claudeTarget}</div>
+      </Field>
+      <Field label={t("detail.codexTarget")}>
+        <div style={monoPathStyle}>{codexTarget}</div>
+      </Field>
 
       {skill.frozen && (
         <div className="full">
@@ -115,33 +124,30 @@ export function SkillDetail({ skill, syncStatus, onChangeMetadata }: Props) {
       )}
 
       {skill.errors && skill.errors.length > 0 && (
-        <div className="full">
-          <div className="label">{t("detail.notes")}</div>
+        <Field label={t("detail.notes")} full>
           <ul style={{ margin: 0, paddingLeft: 18, color: "var(--red)" }}>
             {skill.errors.map((e, i) => (
               <li key={i}>{e}</li>
             ))}
           </ul>
-        </div>
+        </Field>
       )}
 
-      <div className="full">
-        <div className="label">{t("detail.frontmatter")}</div>
+      <Field label={t("detail.frontmatter")} full>
         {fmEntries.length === 0 ? (
           <div className="empty">{t("detail.emptyList")}</div>
         ) : (
           <pre>{fmEntries.map(([k, v]) => `${k}: ${v}`).join("\n")}</pre>
         )}
-      </div>
+      </Field>
 
-      <div className="full">
-        <div className="label">{t("detail.bodyPreview")}</div>
+      <Field label={t("detail.bodyPreview")} full>
         {skill.bodyPreview ? (
           <pre>{skill.bodyPreview}</pre>
         ) : (
           <div className="empty">{t("detail.emptyList")}</div>
         )}
-      </div>
+      </Field>
     </div>
   );
 }

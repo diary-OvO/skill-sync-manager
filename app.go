@@ -22,18 +22,18 @@ import (
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-// App holds state shared by the Wails-bound methods. Every public method on
-// this type is exposed to the frontend by Wails codegen.
+// App 承载所有由 Wails 绑定给前端调用的方法共享的状态。
+// 该类型上的每个公开方法都会被 Wails 代码生成工具暴露给前端。
 type App struct {
 	ctx context.Context
 
 	logMu      sync.Mutex
 	logHistory []models.LogEntry
 
-	// shuttingDown guards the shutdown pipeline against re-entry. OnBeforeClose
-	// can fire more than once in some Wails/WebView2 edge cases (double-click
-	// on the X, programmatic Quit racing with user close, etc.), and we also
-	// expose a QuitApp method to the frontend.
+	// shuttingDown 用于防止关闭流程被重入。
+	// OnBeforeClose 在某些 Wails / WebView2 边界场景下可能触发多次
+	// （连点 X、程序化 Quit 与用户点击同时发生等），另外前端还能调用
+	// QuitApp，因此需要一个原子标志位保证清理只跑一次。
 	shuttingDown atomic.Bool
 }
 
@@ -43,64 +43,60 @@ func NewApp() *App {
 	}
 }
 
-// startup is wired in main.go via options.App.OnStartup.
+// startup 由 main.go 中的 options.App.OnStartup 挂载。
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.logInfo("app:ready", fmt.Sprintf("Skill Sync Manager starting on %s", runtime.GOOS))
 }
 
-// onBeforeClose is wired via options.App.OnBeforeClose. Wails calls this on
-// the main thread when the user triggers window close (X button, Alt-F4, OS
-// menu). Returning false lets the close proceed; returning true would veto it.
+// onBeforeClose 对应 options.App.OnBeforeClose，
+// 由 Wails 在用户触发窗口关闭（X 按钮、Alt-F4、OS 菜单）时在主线程调用。
+// 返回 false 允许关闭，返回 true 则会否决。
 //
-// We run the shutdown pipeline first, then allow the close. The pipeline is
-// idempotent, so onShutdown can safely re-run anything that still has work.
+// 这里先跑关闭流水线，再放行关闭；流水线幂等，因此 onShutdown
+// 之后还能安全地再跑一次未完成的工作。
 func (a *App) onBeforeClose(ctx context.Context) (prevent bool) {
 	a.runShutdown("window-close")
 	return false
 }
 
-// onShutdown is wired via options.App.OnShutdown. It runs after the window is
-// gone but before wails.Run returns. Use it as the last-chance cleanup point
-// for anything that must happen regardless of how we got here (X button,
-// QuitApp from JS, OS signal).
+// onShutdown 对应 options.App.OnShutdown：窗口已销毁、wails.Run 即将返回。
+// 作为最后一道清理入口，涵盖所有退出路径（X 按钮、前端 QuitApp、未来的 OS 信号）。
 func (a *App) onShutdown(ctx context.Context) {
 	a.runShutdown("shutdown-hook")
 }
 
-// runShutdown centralizes the teardown sequence. It is safe to call multiple
-// times — the first call wins and subsequent calls return immediately.
+// runShutdown 是所有关闭路径的统一收口。多次调用是安全的 ——
+// 第一次调用生效，后续调用会立即返回。
 //
-// Current cleanup scope:
-//   - Nothing persistent here *today*: settings are flushed synchronously on
-//     every SaveSettings call, the registry is flushed synchronously on every
-//     SetSkillMetadata / ImportFromCli call, and log history is session-only.
-//   - No background goroutines, no long-lived file handles, no DB.
+// 当前清理范围：
+//   - 暂时没有需要持久化的内容：settings 在 SaveSettings 里同步落盘；
+//     registry 在 SetSkillMetadata / ImportFromCli 里同步落盘；
+//     日志历史只在会话内有效。
+//   - 没有后台 goroutine、没有长连接文件句柄、没有数据库。
 //
-// Keep this function as the single place to add cleanup when that changes:
-// background watchers, file indexers, telemetry flushers, etc. all plug in
-// here and inherit the "runs once, runs on any exit path" guarantee.
+// 未来如果引入后台 watcher、文件索引、上报模块等，都应集中在这里注册清理，
+// 自动继承"只跑一次、在任何退出路径都会跑"的保证。
 func (a *App) runShutdown(reason string) {
 	if !a.shuttingDown.CompareAndSwap(false, true) {
 		return
 	}
-	// Best-effort log entry — if the frontend is already gone, EventsEmit is
-	// a no-op. We still want this in logHistory for any attached debugger.
+	// 尽力而为：前端已消失时 EventsEmit 会变成 no-op，
+	// 但仍希望 logHistory 里留下这条关闭记录，便于调试器查看。
 	a.logInfo("app:shutdown", fmt.Sprintf("Shutting down (%s)", reason))
 
-	// Future cleanup goes here, in reverse order of startup. Example shape:
+	// 未来的清理逻辑按启动的相反顺序放在这里。示例：
 	//
 	//   if a.watcher != nil { a.watcher.Close() }
 	//   if a.indexer != nil { a.indexer.Stop(ctx) }
 	//   if a.db != nil      { _ = a.db.Close() }
 	//
-	// Each step should be wrapped so a single failure does not abort the rest.
+	// 每一步都应包一层保护，单个失败不应中断后续清理。
 }
 
-// QuitApp is exposed to the frontend so the UI (or a hotkey, or a menu item)
-// can trigger a full, graceful exit. Runs the shutdown pipeline, then asks
-// Wails to tear down the window and return from wails.Run. Safe to call from
-// any goroutine; safe to call more than once.
+// QuitApp 暴露给前端：UI、快捷键或菜单都能触发一次完整的优雅退出。
+// 内部先跑清理流水线，再让 Wails 关掉窗口并让 wails.Run 返回。
+// 任何协程都可以调用，多次调用也是安全的。
 func (a *App) QuitApp() {
 	a.runShutdown("quit-api")
 	if a.ctx != nil {
@@ -108,7 +104,7 @@ func (a *App) QuitApp() {
 	}
 }
 
-// ---------- logging ----------
+// ---------- 日志 ----------
 
 const maxLogHistory = 500
 
@@ -137,7 +133,7 @@ func (a *App) logSuccess(action, msg string) models.LogEntry {
 }
 func (a *App) logError(action, msg string) models.LogEntry { return a.pushLog("error", action, msg) }
 
-// LogHistory returns every log entry the backend has recorded this session.
+// LogHistory 返回本次会话内已记录的全部日志条目。
 func (a *App) LogHistory() []models.LogEntry {
 	a.logMu.Lock()
 	defer a.logMu.Unlock()
@@ -146,7 +142,7 @@ func (a *App) LogHistory() []models.LogEntry {
 	return out
 }
 
-// ---------- settings ----------
+// ---------- 设置 ----------
 
 func (a *App) LoadSettings() (models.AppSettings, error) {
 	return settings.LoadSettings()
@@ -165,27 +161,27 @@ func (a *App) SaveSettings(s models.AppSettings) error {
 	return nil
 }
 
-// ---------- dialogs / shell ----------
+// ---------- 对话框 / Shell ----------
 
-func (a *App) SelectRootFolder() (string, error) {
+// openDirectoryDialog 是两个 SelectXxxFolder 的共用实现，只有标题不同。
+func (a *App) openDirectoryDialog(title string) (string, error) {
 	if a.ctx == nil {
 		return "", fmt.Errorf("dialog not available yet")
 	}
 	return wailsRuntime.OpenDirectoryDialog(a.ctx, wailsRuntime.OpenDialogOptions{
-		Title: "Select Shared Skill Root",
+		Title: title,
 	})
+}
+
+func (a *App) SelectRootFolder() (string, error) {
+	return a.openDirectoryDialog("Select Shared Skill Root")
 }
 
 func (a *App) SelectSkillFolder() (string, error) {
-	if a.ctx == nil {
-		return "", fmt.Errorf("dialog not available yet")
-	}
-	return wailsRuntime.OpenDirectoryDialog(a.ctx, wailsRuntime.OpenDialogOptions{
-		Title: "Select Skill Folder to Import",
-	})
+	return a.openDirectoryDialog("Select Skill Folder to Import")
 }
 
-// OpenPath opens `path` in the OS file explorer / finder.
+// OpenPath 在系统文件管理器中打开 path（Windows 资源管理器 / macOS Finder 等）。
 func (a *App) OpenPath(path string) error {
 	if path == "" {
 		return fmt.Errorf("no path provided")
@@ -228,7 +224,7 @@ func (a *App) ImportSkillFolder(source string, root string) (models.SkillInfo, e
 	return skill, nil
 }
 
-// ---------- tools / git ----------
+// ---------- 工具检测 / Git ----------
 
 func (a *App) DetectCliTools() ([]models.ToolStatus, error) {
 	tools := clidetector.DetectCliTools()
@@ -246,35 +242,35 @@ func (a *App) GetGitStatus(root string) (models.GitStatus, error) {
 	return gitstatus.GetGitStatus(root), nil
 }
 
-// ---------- sync ----------
+// ---------- 同步 ----------
 
 func (a *App) CheckSyncStatus(skill models.SkillInfo, toolName string) (models.SyncStatus, error) {
 	return synctargets.CheckSyncStatus(skill, toolName)
 }
 
+// syncErrorStatus 构造一个带统一 TargetPath 的错误态 SyncStatus，
+// 避免在 SyncSkillToTool 里重复样板。
+func (a *App) syncErrorStatus(toolName, skillName string, state models.SyncState, msg string) models.SyncStatus {
+	targetPath, _ := synctargets.GetTargetPath(toolName, skillName)
+	return models.SyncStatus{
+		TargetName: toolName,
+		TargetPath: targetPath,
+		State:      state,
+		Message:    msg,
+	}
+}
+
 func (a *App) SyncSkillToTool(skill models.SkillInfo, toolName string) (models.SyncStatus, error) {
 	if !models.IsSupportedTool(toolName) {
-		targetPath, _ := synctargets.GetTargetPath(toolName, skill.Name)
 		msg := fmt.Sprintf("Sync to %s is not yet supported.", toolName)
 		a.logInfo("sync:skill", msg)
-		return models.SyncStatus{
-			TargetName: toolName,
-			TargetPath: targetPath,
-			State:      models.SyncStateUnsupported,
-			Message:    msg,
-		}, nil
+		return a.syncErrorStatus(toolName, skill.Name, models.SyncStateUnsupported, msg), nil
 	}
 
 	if !symlinkwindows.IsWindows() {
-		targetPath, _ := synctargets.GetTargetPath(toolName, skill.Name)
 		msg := "Current version only supports Windows directory junctions for sync."
 		a.logError("sync:skill", msg)
-		return models.SyncStatus{
-			TargetName: toolName,
-			TargetPath: targetPath,
-			State:      models.SyncStateError,
-			Message:    msg,
-		}, nil
+		return a.syncErrorStatus(toolName, skill.Name, models.SyncStateError, msg), nil
 	}
 
 	result, err := synctargets.SyncSkillToTool(skill, toolName)
@@ -295,10 +291,10 @@ func (a *App) SyncSkillToTool(skill models.SkillInfo, toolName string) (models.S
 	return result, nil
 }
 
-// ---------- CLI inspector / metadata ----------
+// ---------- CLI 扫描 / 元数据 ----------
 
-// ScanCliTool returns every top-level entry inside a CLI tool's skills
-// directory, classified against the current shared root. Read-only.
+// ScanCliTool 返回某个 CLI 工具 skills 目录下的所有顶层条目，
+// 并相对当前共享根进行分类。只读操作。
 func (a *App) ScanCliTool(toolName string, sharedRoot string) ([]models.CliSkillEntry, error) {
 	entries, err := clitoolscanner.ScanCliSkills(toolName, sharedRoot)
 	if err != nil {
@@ -309,9 +305,8 @@ func (a *App) ScanCliTool(toolName string, sharedRoot string) ([]models.CliSkill
 	return entries, nil
 }
 
-// RefreshSyncStatuses recomputes CheckSyncStatus for every skill against
-// every supported tool without rescanning directories. Returns a map
-// keyed by skill.Path -> toolName -> SyncStatus.
+// RefreshSyncStatuses 对每个 skill × 每个已支持工具重新计算 CheckSyncStatus，
+// 不会重新扫描目录。返回以 skill.Path -> toolName -> SyncStatus 为索引的 map。
 func (a *App) RefreshSyncStatuses(skills []models.SkillInfo) (map[string]map[string]models.SyncStatus, error) {
 	out := make(map[string]map[string]models.SyncStatus, len(skills))
 	for _, s := range skills {
@@ -328,9 +323,8 @@ func (a *App) RefreshSyncStatuses(skills []models.SkillInfo) (map[string]map[str
 	return out, nil
 }
 
-// UnlinkSkill removes a tool-side junction for a skill. Real directories
-// are never deleted. Returns an error if the path exists but is not a
-// link.
+// UnlinkSkill 移除某个工具侧为该 skill 创建的 junction。
+// 真实目录永远不会被删除；若目标存在但不是链接，会返回错误。
 func (a *App) UnlinkSkill(toolName string, skillName string) error {
 	if err := synctargets.UnlinkSkillFromTool(toolName, skillName); err != nil {
 		a.logError("sync:unlink", err.Error())
@@ -340,9 +334,9 @@ func (a *App) UnlinkSkill(toolName string, skillName string) error {
 	return nil
 }
 
-// ImportSkillFromCli copies a CLI-side real skill directory into the
-// shared root and marks it in the registry. origin must be "owned" or
-// "vendored"; any other value is normalized to "vendored".
+// ImportSkillFromCli 将 CLI 工具目录下的真实 skill 复制进共享根，
+// 并在注册表中做好标记。origin 必须是 "owned" 或 "vendored"，
+// 其它值都会被规范化为 "vendored"。
 func (a *App) ImportSkillFromCli(toolName string, cliSkillName string, sharedRoot string, origin string) (models.SkillInfo, error) {
 	skill, err := skillscanner.ImportFromCli(toolName, cliSkillName, sharedRoot, models.SkillOrigin(origin))
 	if err != nil {
@@ -356,17 +350,15 @@ func (a *App) ImportSkillFromCli(toolName string, cliSkillName string, sharedRoo
 	return skill, nil
 }
 
-// SkillMetadataPatch is the payload for SetSkillMetadata. Any pointer
-// field left nil is not modified, so the UI can send only the toggle it
-// just flipped.
+// SkillMetadataPatch 是 SetSkillMetadata 的入参。
+// 任何指针字段为 nil 时表示不修改，这样前端可以只发送刚被切换的那一项。
 type SkillMetadataPatch struct {
 	Hidden *bool   `json:"hidden,omitempty"`
 	Frozen *bool   `json:"frozen,omitempty"`
 	Origin *string `json:"origin,omitempty"`
 }
 
-// SetSkillMetadata updates registry fields for a skill. Returns the
-// merged entry.
+// SetSkillMetadata 更新注册表中某个 skill 的字段，返回合并后的条目。
 func (a *App) SetSkillMetadata(sharedRoot string, skillName string, patch SkillMetadataPatch) (registry.Entry, error) {
 	if skillName == "" {
 		return registry.Entry{}, fmt.Errorf("skill name must not be empty")
@@ -403,7 +395,7 @@ func (a *App) SetSkillMetadata(sharedRoot string, skillName string, patch SkillM
 	return updated, nil
 }
 
-// GetRegistry returns the raw registry document for a shared root.
+// GetRegistry 返回指定共享根下的注册表原始文档。
 func (a *App) GetRegistry(sharedRoot string) (registry.Registry, error) {
 	return registry.Load(sharedRoot)
 }

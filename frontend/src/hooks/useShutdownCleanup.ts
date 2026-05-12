@@ -3,19 +3,16 @@ import { useEffect } from "react";
 type CleanupFn = () => void;
 
 /**
- * Register a cleanup function that runs when the window is about to go away:
- * page hide, unload, or Wails-side shutdown. Use this for things that must
- * happen regardless of React unmount order — flushing a pending localStorage
- * write, stopping a `setInterval`, sending a final log event, etc.
+ * 注册一段"窗口即将消失"时要执行的清理逻辑：页面隐藏、卸载，或 Wails 主动关闭。
+ * 用于那些必须在任何 React 卸载顺序之前完成的工作 ——
+ * 如冲刷 localStorage 缓存、停止 setInterval、发送最后一条日志等。
  *
- * Contract:
- *  - The cleanup must be synchronous and fast. `pagehide`/`beforeunload`
- *    listeners are given a few ms at best; async work will be cut off.
- *  - The cleanup must be idempotent. The browser may fire `pagehide` followed
- *    by `beforeunload` in quick succession, and React StrictMode in dev will
- *    mount the hook twice.
- *  - The cleanup also runs when the component that registered it unmounts,
- *    so routing away from a view triggers it too.
+ * 约束：
+ *  - 清理必须是同步且快速的。`pagehide` / `beforeunload` 只给几毫秒时间，
+ *    异步任务会被切断。
+ *  - 清理必须是幂等的。浏览器可能在极短时间内连续触发 `pagehide` 与 `beforeunload`，
+ *    开发模式下 React StrictMode 也会让 hook 挂载两次。
+ *  - 当注册它的组件卸载时（如路由切换），清理也会被触发一次。
  */
 export function useShutdownCleanup(cleanup: CleanupFn): void {
   useEffect(() => {
@@ -26,17 +23,15 @@ export function useShutdownCleanup(cleanup: CleanupFn): void {
       try {
         cleanup();
       } catch {
-        /* swallow — we are on the way out, nothing to report to */
+        /* 吞掉异常：我们正在离开，已经没人接收报告 */
       }
     };
 
-    // pagehide fires on tab close, navigation away, and (on most platforms)
-    // when the Wails webview is torn down. It is the most reliable of the
-    // "window is going away" events; beforeunload is not fired on mobile and
-    // unload is deprecated.
+    // pagehide 在标签关闭、导航离开，以及多数平台上 Wails webview 被销毁时触发。
+    // 它是所有"窗口即将消失"事件中最可靠的一个：
+    // beforeunload 在移动端不触发，unload 已被弃用。
     window.addEventListener("pagehide", runOnce);
-    // beforeunload covers the desktop case where pagehide arrives too late,
-    // and gives us one more shot at synchronous cleanup.
+    // beforeunload 覆盖桌面端 pagehide 抵达过晚的场景，再给一次机会做同步清理。
     window.addEventListener("beforeunload", runOnce);
 
     return () => {

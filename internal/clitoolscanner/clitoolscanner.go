@@ -1,7 +1,7 @@
-// Package clitoolscanner inspects a CLI tool's skills directory (for
-// example %USERPROFILE%\.claude\skills) and classifies every top-level
-// entry relative to the user's shared skill root. It is strictly
-// read-only: no files are created, moved, or deleted here.
+// Package clitoolscanner 负责扫描某个 CLI 工具的 skills 目录
+// （例如 %USERPROFILE%\.claude\skills），并相对用户的共享 skill 根目录
+// 对其中的每一个顶层条目进行分类。
+// 本包是严格只读的：不会创建、移动或删除任何文件。
 package clitoolscanner
 
 import (
@@ -16,9 +16,8 @@ import (
 	"skill-sync-manager/internal/synctargets"
 )
 
-// ScanCliSkills enumerates the skills directory for `toolName` and
-// classifies each entry. A non-existent CLI directory is not an error —
-// we just return an empty slice.
+// ScanCliSkills 枚举 toolName 对应的 skills 目录并对每一项分类。
+// 目录不存在不算错误，会返回空切片。
 func ScanCliSkills(toolName string, sharedRoot string) ([]models.CliSkillEntry, error) {
 	dir, err := synctargets.GetTargetDir(toolName)
 	if err != nil {
@@ -45,15 +44,15 @@ func ScanCliSkills(toolName string, sharedRoot string) ([]models.CliSkillEntry, 
 	out := make([]models.CliSkillEntry, 0, len(entries))
 	for _, entry := range entries {
 		full := filepath.Join(dir, entry.Name())
-		// Inspect with Lstat on the full path — DirEntry.IsDir and .Info
-		// can misreport NTFS junctions across Go/Windows versions.
+		// 用完整路径调用 Lstat：不同 Go / Windows 版本下，
+		// DirEntry.IsDir 与 .Info 对 NTFS junction 的判定会不一致。
 		st, err := os.Lstat(full)
 		if err != nil {
 			continue
 		}
 		isLink := symlinkwindows.IsLinkPath(full)
 		if !isLink && !st.IsDir() {
-			// Skip stray files that aren't skills.
+			// 非 skill 的零散文件直接跳过。
 			continue
 		}
 
@@ -64,7 +63,7 @@ func ScanCliSkills(toolName string, sharedRoot string) ([]models.CliSkillEntry, 
 			IsLink:    isLink,
 		}
 
-		// Does a matching shared-root skill exist?
+		// 共享根下是否存在同名 skill。
 		sharedPath, sharedExists := sharedSkillNames[entry.Name()]
 		if sharedExists {
 			item.SharedRootPath = sharedPath
@@ -79,11 +78,11 @@ func ScanCliSkills(toolName string, sharedRoot string) ([]models.CliSkillEntry, 
 					item.Kind = models.CliSkillKindStrayLink
 				}
 			} else {
-				// Could not resolve; treat as stray so the UI doesn't mis-trust it.
+				// 无法解析时，按 stray-link 处理，避免 UI 误以为受托管。
 				item.Kind = models.CliSkillKindStrayLink
 			}
 		} else {
-			// Real directory.
+			// 真实目录。
 			skillMd := filepath.Join(full, "SKILL.md")
 			if st, err := os.Stat(skillMd); err == nil && !st.IsDir() {
 				item.HasSkillMd = true
@@ -103,6 +102,8 @@ func ScanCliSkills(toolName string, sharedRoot string) ([]models.CliSkillEntry, 
 	return out, nil
 }
 
+// listSharedRootSkills 返回共享根下所有 "带 SKILL.md 的子目录" 名称到完整路径的映射，
+// 便于按名称快速判断 CLI 目录中的条目是否对应共享根下的 skill。
 func listSharedRootSkills(sharedRoot string) map[string]string {
 	m := map[string]string{}
 	if sharedRoot == "" {
@@ -125,6 +126,9 @@ func listSharedRootSkills(sharedRoot string) map[string]string {
 	return m
 }
 
+// samePath 判断两个路径是否指向同一个目标。
+// 先做大小写不敏感的字面量比较；再通过 EvalSymlinks 解析真实路径对比，
+// 以覆盖 Windows 短名 / 长名、父级是符号链接等差异场景。
 func samePath(a, b string) bool {
 	absA, errA := filepath.Abs(a)
 	absB, errB := filepath.Abs(b)
@@ -136,10 +140,6 @@ func samePath(a, b string) bool {
 	if strings.EqualFold(cleanA, cleanB) {
 		return true
 	}
-	// Also compare after resolving both paths through the filesystem.
-	// This handles Windows 8.3 short-name vs long-name differences and
-	// paths that pass through symlinked parents (e.g. %TEMP% on some
-	// configurations maps to a different canonical path).
 	resA, errA := filepath.EvalSymlinks(absA)
 	resB, errB := filepath.EvalSymlinks(absB)
 	if errA == nil && errB == nil {

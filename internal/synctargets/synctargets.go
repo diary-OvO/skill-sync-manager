@@ -10,8 +10,11 @@ import (
 	"skill-sync-manager/internal/symlinkwindows"
 )
 
+// 当前版本仅支持通过 Windows 目录 junction 做同步，其他平台一律返回此提示。
 const windowsOnlyMessage = "Current version only supports Windows directory junctions for sync."
 
+// getHomeDir 获取当前用户主目录。优先使用 os.UserHomeDir，
+// 再退回 USERPROFILE / HOME 环境变量。
 func getHomeDir() (string, error) {
 	if h, err := os.UserHomeDir(); err == nil && h != "" {
 		return h, nil
@@ -41,8 +44,8 @@ func GetCodexSkillsDir() (string, error) {
 	return filepath.Join(h, ".codex", "skills"), nil
 }
 
-// GetTargetDir returns the per-tool skills directory. For unsupported tools
-// it still returns something so the UI can display a placeholder path.
+// GetTargetDir 返回某个工具的 skills 目录。
+// 即使是尚未支持的工具也会返回一个占位路径，方便前端显示。
 func GetTargetDir(toolName string) (string, error) {
 	switch toolName {
 	case "claude":
@@ -177,9 +180,9 @@ func SyncSkillToTool(skill models.SkillInfo, toolName string) (models.SyncStatus
 	}, nil
 }
 
-// UnlinkSkillFromTool removes the junction/symlink for `skillName` under
-// `toolName`'s target directory. It refuses to touch real directories —
-// only link entries are ever removed. Safe to call when nothing exists.
+// UnlinkSkillFromTool 从 toolName 对应的目录下移除 skillName 所在的
+// junction / 符号链接。只会删除链接项，真实目录永远不会被触碰；
+// 当目标根本不存在时返回 nil，调用方无需判空。
 func UnlinkSkillFromTool(toolName string, skillName string) error {
 	if skillName == "" {
 		return fmt.Errorf("skill name must not be empty")
@@ -197,7 +200,7 @@ func UnlinkSkillFromTool(toolName string, skillName string) error {
 			targetPath,
 		)
 	}
-	// os.Remove deletes symlinks and junctions without following them.
+	// os.Remove 可以直接删除符号链接 / junction，而不会跟随进去。
 	if err := os.Remove(targetPath); err != nil {
 		return fmt.Errorf("failed to remove link %s: %v", targetPath, err)
 	}

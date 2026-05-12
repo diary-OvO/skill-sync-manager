@@ -16,7 +16,7 @@ func runGit(args ...string) (string, error) {
 	return string(out), nil
 }
 
-// IsGitAvailable returns true if `git --version` works.
+// IsGitAvailable 判断本机是否能正常调用 `git --version`。
 func IsGitAvailable() bool {
 	out, err := runGit("--version")
 	if err != nil {
@@ -25,9 +25,8 @@ func IsGitAvailable() bool {
 	return strings.Contains(strings.ToLower(out), "git")
 }
 
-// GetGitStatus runs a series of read-only git commands against `root` and
-// returns a stable struct. No command failure is propagated as an error —
-// the UI just sees the appropriate flags set to false.
+// GetGitStatus 针对 root 运行一系列只读的 git 命令，返回稳定的结构体。
+// 命令失败不会作为错误抛出 —— 前端看到的是对应字段被置为 false。
 func GetGitStatus(root string) models.GitStatus {
 	status := models.GitStatus{
 		Remotes: []string{},
