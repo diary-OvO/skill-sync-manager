@@ -169,6 +169,7 @@ const messages: Record<Lang, MessageTree> = {
         open: "Open folder",
         ignore: "Ignore",
         ignoreTitle: "Never show this folder again",
+        close: "Close this panel",
       },
       confirm: {
         unlink: "Remove the junction at {path}? The real files it points at are untouched.",
@@ -358,6 +359,7 @@ const messages: Record<Lang, MessageTree> = {
         open: "打开目录",
         ignore: "忽略此项",
         ignoreTitle: "永久忽略这个目录，后续扫描不再出现",
+        close: "关闭此面板",
       },
       confirm: {
         unlink: "移除位于 {path} 的链接？目标数据本身不会被删除。",

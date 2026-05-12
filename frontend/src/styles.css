@@ -1642,3 +1642,24 @@ input[type="text"]:focus {
 .btn-ignore {
   color: var(--text-muted);
 }
+
+/* Inspector 面板右上角的 × —— 关闭面板（其实是清空该工具的 entries） */
+.inspector-close {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 18px;
+  line-height: 1;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.inspector-close:hover {
+  background: var(--panel-hover);
+  color: var(--text);
+  border-color: transparent;
+  box-shadow: none;
+}

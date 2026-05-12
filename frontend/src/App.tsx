@@ -532,6 +532,7 @@ function AppInner() {
                   onOpen={handleInspectorOpen}
                   onIgnore={(e) => ignoredPaths.ignore(e.path)}
                   onUnignore={ignoredPaths.unignore}
+                  onClose={() => setInspector((prev) => ({ ...prev, claude: [] }))}
                 />
               )}
               {inspector.codex.length > 0 && (
@@ -545,6 +546,7 @@ function AppInner() {
                   onOpen={handleInspectorOpen}
                   onIgnore={(e) => ignoredPaths.ignore(e.path)}
                   onUnignore={ignoredPaths.unignore}
+                  onClose={() => setInspector((prev) => ({ ...prev, codex: [] }))}
                 />
               )}
             </div>

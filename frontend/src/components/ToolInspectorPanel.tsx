@@ -12,6 +12,7 @@ interface Props {
   onOpen: (entry: CliSkillEntry) => void;
   onIgnore: (entry: CliSkillEntry) => void;
   onUnignore: (path: string) => void;
+  onClose: () => void;
 }
 
 export function ToolInspectorPanel({
@@ -24,6 +25,7 @@ export function ToolInspectorPanel({
   onOpen,
   onIgnore,
   onUnignore,
+  onClose,
 }: Props) {
   const { t } = useLanguage();
   const toolLabel = tool === "claude" ? "Claude" : "Codex";
@@ -47,7 +49,18 @@ export function ToolInspectorPanel({
   return (
     <div className="panel">
       <div className="panel-header">
-        {t("inspector.title")} — {toolLabel}
+        <span>
+          {t("inspector.title")} — {toolLabel}
+        </span>
+        <button
+          type="button"
+          className="inspector-close"
+          onClick={onClose}
+          aria-label={t("inspector.action.close")}
+          title={t("inspector.action.close")}
+        >
+          ×
+        </button>
       </div>
       <div className="panel-body">
         {visible.length === 0 ? (
