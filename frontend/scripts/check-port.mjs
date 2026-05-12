@@ -1,9 +1,10 @@
 // Pre-dev port guard.
 //
-// Bind-test 127.0.0.1:5173. If it's already held, print a clear message and
+// Bind-test the Wails frontend dev port. If it's already held, print a clear message and
 // exit 1 so `wails dev` / `npm run dev` fails fast instead of silently
-// drifting to 5174/5175 (Vite strictPort also rejects, but this runs first
-// and gives a nicer message, including the PID on Windows when possible).
+// starting Wails against a frontend server it cannot proxy. Vite strictPort
+// also rejects the conflict, but this runs first and gives a clearer message,
+// including the PID on Windows when possible.
 //
 // We never kill anything — the user decides what to do with the offending
 // process.
@@ -13,13 +14,13 @@ import { execSync } from "node:child_process";
 import process from "node:process";
 
 const HOST = "127.0.0.1";
-const PORT = 5173;
+const PORT = 34116;
 
 function findPidWindows(port) {
   try {
     const out = execSync(`netstat -ano -p tcp`, { encoding: "utf8" });
     // netstat rows look like:
-    //   TCP    127.0.0.1:5173    0.0.0.0:0    LISTENING    12345
+    //   TCP    127.0.0.1:34116    0.0.0.0:0    LISTENING    12345
     const needle = `:${port} `;
     for (const line of out.split(/\r?\n/)) {
       if (line.includes("LISTENING") && line.includes(needle)) {
@@ -63,7 +64,7 @@ if (code === "EADDRINUSE") {
     console.error("  Find the owner and stop it before running `wails dev`.");
   }
   console.error(
-    "  Vite is configured with strictPort — it will NOT fall back to 5174/5175.",
+    "  Vite and Wails are configured to use this exact port in development.",
   );
   console.error("");
   process.exit(1);
