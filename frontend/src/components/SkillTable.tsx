@@ -1,26 +1,29 @@
-import type { SkillInfo, SyncState, SyncStatus } from "../types";
-import type { SyncStatusMap } from "../App";
+import type { SkillInfo, ToolName } from "../types";
+import type { SyncStatusMap, PendingSet } from "../hooks/useSyncActions";
 import { useLanguage } from "../i18n";
 import { useColumnResize, type ColumnWidths } from "../hooks/useDragResize";
+import { ToolToggleRow } from "./ToolToggleRow";
 
 interface Props {
   skills: SkillInfo[];
   syncStatus: SyncStatusMap;
+  pending: PendingSet;
   selectedPath: string | null;
   onSelect: (path: string) => void;
+  onSync: (skill: SkillInfo, tool: ToolName) => void;
+  onUnlink: (skill: SkillInfo, tool: ToolName) => void;
   showHidden: boolean;
   onToggleShowHidden: (v: boolean) => void;
 }
 
-type ColumnKey = "name" | "description" | "origin" | "valid" | "claude" | "codex" | "path";
+type ColumnKey = "name" | "description" | "origin" | "valid" | "tools" | "path";
 
 const DEFAULT_WIDTHS: ColumnWidths = {
   name: 180,
   description: 320,
   origin: 92,
   valid: 78,
-  claude: 118,
-  codex: 118,
+  tools: 200,
   path: 240,
 };
 
@@ -29,26 +32,18 @@ const COLUMN_ORDER: ColumnKey[] = [
   "description",
   "origin",
   "valid",
-  "claude",
-  "codex",
+  "tools",
   "path",
 ];
-
-function StatusBadge({ status, unknownLabel }: { status?: SyncStatus; unknownLabel: string }) {
-  if (!status) return <span className="badge missing">{unknownLabel}</span>;
-  const state: SyncState = status.state;
-  return (
-    <span className={`badge ${state}`} title={status.message}>
-      {state}
-    </span>
-  );
-}
 
 export function SkillTable({
   skills,
   syncStatus,
+  pending,
   selectedPath,
   onSelect,
+  onSync,
+  onUnlink,
   showHidden,
   onToggleShowHidden,
 }: Props) {
@@ -56,8 +51,9 @@ export function SkillTable({
   const visible = showHidden ? skills : skills.filter((s) => !s.hidden);
   const hiddenCount = skills.filter((s) => s.hidden).length;
 
+  // v2：列结构由 claude/codex 两列改为 tools 一列，旧的 v1 宽度不兼容，另起一份。
   const { widths, startResize, reset, dragging } = useColumnResize(
-    "ssm.skillTable.columnWidths.v1",
+    "ssm.skillTable.columnWidths.v2",
     DEFAULT_WIDTHS,
     50,
   );
@@ -67,8 +63,7 @@ export function SkillTable({
     description: t("table.description"),
     origin: t("skill.origin"),
     valid: t("table.valid"),
-    claude: t("table.claude"),
-    codex: t("table.codex"),
+    tools: t("table.tools"),
     path: t("table.path"),
   };
 
@@ -107,9 +102,8 @@ export function SkillTable({
               className="skill-table"
               style={{
                 tableLayout: "fixed",
-                // Sum of column widths — anchors the table at its natural
-                // total but lets the outer `.skill-table-scroll` scroll
-                // horizontally when the viewport is narrower.
+                // 所有列宽之和：表格按列宽汇总决定自身宽度；
+                // 当视口比表格更窄时，外层 `.skill-table-scroll` 会出现水平滚动。
                 width: COLUMN_ORDER.reduce((sum, k) => sum + (widths[k] ?? 0), 0),
                 minWidth: "100%",
               }}
@@ -139,6 +133,14 @@ export function SkillTable({
                 {visible.map((skill) => {
                   const rowStatus = syncStatus[skill.path];
                   const originKey = skill.origin || "owned";
+                  // 选出本行的 pending tool 集合（路径前缀匹配）。
+                  const rowPending = new Set<ToolName>();
+                  const prefix = `${skill.path}::`;
+                  pending.forEach((key) => {
+                    if (key.startsWith(prefix)) {
+                      rowPending.add(key.slice(prefix.length) as ToolName);
+                    }
+                  });
                   return (
                     <tr
                       key={skill.path}
@@ -179,16 +181,16 @@ export function SkillTable({
                           {skill.valid ? t("git.yes") : t("git.no")}
                         </span>
                       </td>
-                      <td className="cell-badge">
-                        <StatusBadge
-                          status={rowStatus?.claude}
-                          unknownLabel={t("table.unknown")}
-                        />
-                      </td>
-                      <td className="cell-badge">
-                        <StatusBadge
-                          status={rowStatus?.codex}
-                          unknownLabel={t("table.unknown")}
+                      <td className="cell-tools">
+                        <ToolToggleRow
+                          skill={skill}
+                          syncStatus={rowStatus}
+                          pending={rowPending}
+                          onSync={(s, tool) => onSync(s, tool)}
+                          onUnlink={(s, tool, e) => {
+                            e.stopPropagation();
+                            onUnlink(s, tool);
+                          }}
                         />
                       </td>
                       <td className="path" title={skill.path}>

@@ -16,14 +16,17 @@ import { GitStatusPanel } from "./components/GitStatusPanel";
 import { ToolStatusPanel } from "./components/ToolStatusPanel";
 import { SkillTable } from "./components/SkillTable";
 import { SkillDetail } from "./components/SkillDetail";
-import { ActionPanel } from "./components/ActionPanel";
+import { GlobalSyncBar } from "./components/GlobalSyncBar";
 import { LogPanel } from "./components/LogPanel";
 import { ToolInspectorPanel } from "./components/ToolInspectorPanel";
-import { useHorizontalSplit, useVerticalSplit } from "./hooks/useDragResize";
+import { ToastProvider } from "./components/Toast";
+import { useVerticalSplit } from "./hooks/useDragResize";
 import { useShutdownCleanup } from "./hooks/useShutdownCleanup";
+import { useSyncActions, type SyncStatusMap } from "./hooks/useSyncActions";
 import { useLanguage } from "./i18n";
 
-export type SyncStatusMap = Record<string, Partial<Record<ToolName, SyncStatus>>>;
+// 向后兼容：历史上 SyncStatusMap 在 App.tsx 导出，现在搬到 hooks 里，保留 re-export。
+export type { SyncStatusMap } from "./hooks/useSyncActions";
 
 type InspectorState = {
   claude: CliSkillEntry[];
@@ -39,6 +42,14 @@ function isWindowsPlatform(): boolean {
 }
 
 export function App() {
+  return (
+    <ToastProvider>
+      <AppInner />
+    </ToastProvider>
+  );
+}
+
+function AppInner() {
   const { t } = useLanguage();
 
   const [sharedRoot, setSharedRoot] = useState<string>("");
@@ -57,9 +68,8 @@ export function App() {
     codex: false,
   });
   const didInit = useRef(false);
-  // Holds the Wails "log:entry" unsubscribe so shutdown cleanup can invoke it
-  // even if the normal React unmount path doesn't fire in time (e.g. pagehide
-  // on window close beats useEffect cleanup).
+  // 保存 Wails "log:entry" 的取消订阅函数，关闭时优先用它来清理。
+  // React 卸载清理在 pagehide / 窗口关闭时可能来不及触发，因此这里用 ref 兜底。
   const logUnsubRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -74,7 +84,7 @@ export function App() {
         const history = await api.logHistory();
         setLogs(history);
       } catch {
-        /* history not yet available */
+        /* 历史日志尚不可用 */
       }
       try {
         const settings = await api.loadSettings();
@@ -86,12 +96,7 @@ export function App() {
           setTools(toolList);
         }
       } catch (err) {
-        appendLog({
-          timestamp: new Date().toISOString(),
-          action: "startup",
-          result: "error",
-          message: (err as Error).message,
-        });
+        logLocal("startup", "error", (err as Error).message);
       }
     })();
 
@@ -106,20 +111,18 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Synchronous, idempotent cleanup invoked on pagehide/beforeunload and on
-  // unmount. Any UI-side state that needs to be durable across a close must
-  // be committed before this returns.
+  // 关闭时的同步幂等清理：pagehide / beforeunload / 组件卸载都会触发。
+  // 任何需要跨关闭持久化的 UI 状态必须在这里返回之前提交。
   //
-  // Today the only live subscription is the Wails log-entry listener; drag
-  // sizes are already persisted on every change (see useDragResize.ts), so
-  // there's nothing else to flush here. Add future teardown (timers, web
-  // workers, pending fetch aborts) to this function.
+  // 目前唯一活跃的订阅是 Wails log-entry 监听；
+  // 分栏尺寸已经在每次变化时即时持久化（见 useDragResize.ts）。
+  // 未来若引入计时器、Web Worker、待取消的 fetch 等，都应加到此函数内。
   const onShutdown = useCallback(() => {
     try {
       logUnsubRef.current?.();
       logUnsubRef.current = null;
     } catch {
-      /* ignore — Wails runtime may already be torn down */
+      /* 忽略：Wails runtime 此时可能已销毁 */
     }
   }, []);
   useShutdownCleanup(onShutdown);
@@ -131,6 +134,41 @@ export function App() {
     });
   }
 
+  // 构造并追加一条本地日志。统一处理 timestamp，避免调用处到处重复 `new Date().toISOString()`。
+  function logLocal(action: string, result: LogEntry["result"], message: string): void {
+    appendLog({
+      timestamp: new Date().toISOString(),
+      action,
+      result,
+      message,
+    });
+  }
+
+  // 合并某个 skill × tool 的同步状态到全局 syncStatus。
+  // useSyncActions 的 syncOne / bulkSync / refreshOne 都走这一个入口，
+  // 避免手写嵌套 spread。
+  function mergeSyncStatus(path: string, tool: ToolName, status: SyncStatus): void {
+    setSyncStatus((prev) => ({
+      ...prev,
+      [path]: { ...(prev[path] ?? {}), [tool]: status },
+    }));
+  }
+
+  // useSyncActions 里 unlinkOne 完成后要拿"权威态"回写 —— 调一次 CheckSyncStatus 并 merge。
+  const refreshOne = useCallback(
+    async (skill: SkillInfo, tool: ToolName): Promise<void> => {
+      try {
+        const status = await api.checkSyncStatus(skill, tool);
+        mergeSyncStatus(skill.path, tool, status);
+      } catch {
+        /* 非致命：下次 Scan / RefreshSync 会重新拉 */
+      }
+    },
+    [],
+  );
+
+  const actions = useSyncActions({ skills, syncStatus, mergeSyncStatus, refreshOne });
+
   async function refreshSyncStatuses(list: SkillInfo[]): Promise<SyncStatusMap> {
     if (list.length === 0) return {};
     try {
@@ -141,7 +179,7 @@ export function App() {
       }
       return map;
     } catch {
-      // Fall back to per-skill calls if the batch endpoint is unavailable.
+      // 批量接口不可用时，退化为逐个 skill 调用。
       const map: SyncStatusMap = {};
       await Promise.all(
         list.map(async (skill) => {
@@ -174,12 +212,7 @@ export function App() {
         setSelectedSkillPath(scanned[0].path);
       }
     } catch (err) {
-      appendLog({
-        timestamp: new Date().toISOString(),
-        action: "scan",
-        result: "error",
-        message: (err as Error).message,
-      });
+      logLocal("scan", "error", (err as Error).message);
     } finally {
       setBusy(false);
     }
@@ -202,7 +235,7 @@ export function App() {
     try {
       await api.saveSettings({ sharedRoot });
     } catch {
-      /* non-fatal */
+      /* 非致命错误：settings 写失败不应该阻断扫描流程 */
     }
     await runScanFlow(sharedRoot);
   }
@@ -227,7 +260,7 @@ export function App() {
     try {
       const entries = await api.scanCliTool(tool, sharedRoot);
       setInspector((prev) => ({ ...prev, [tool]: entries }));
-      // Rescanning a CLI dir often unblocks a conflict — refresh overall sync.
+      // 重扫 CLI 目录通常会解决 conflict，顺便刷新整体同步状态。
       if (skills.length > 0) {
         const map = await refreshSyncStatuses(skills);
         setSyncStatus(map);
@@ -256,77 +289,7 @@ export function App() {
   }
 
   async function handleSyncOne(skill: SkillInfo, toolName: ToolName): Promise<void> {
-    setBusy(true);
-    try {
-      const status = await api.syncSkillToTool(skill, toolName);
-      setSyncStatus((prev) => ({
-        ...prev,
-        [skill.path]: { ...(prev[skill.path] ?? {}), [toolName]: status },
-      }));
-      if (status.state === "unsupported") {
-        window.alert(t("action.unsupportedAlert", { tool: toolName }));
-      } else if (status.state === "conflict") {
-        window.alert(
-          t("action.conflictAlert", {
-            name: skill.name,
-            tool: toolName,
-            message: status.message,
-          }),
-        );
-      } else if (status.state === "error") {
-        window.alert(
-          t("action.errorAlert", {
-            name: skill.name,
-            tool: toolName,
-            message: status.message,
-          }),
-        );
-      }
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleSyncMany(
-    target: "claude" | "codex" | "both",
-    scope: "selected" | "all",
-  ): Promise<void> {
-    const baseList = scope === "all" ? skills : selectedSkill ? [selectedSkill] : [];
-    if (baseList.length === 0) {
-      window.alert(t("action.noSelectedAlert"));
-      return;
-    }
-    // For scope=all, skip hidden + frozen. For scope=selected, honor the user's choice.
-    const list = scope === "all" ? baseList.filter((s) => !s.hidden && !s.frozen) : baseList;
-    if (list.length === 0) {
-      // Everything was filtered out — show a log note so the user knows why nothing happened.
-      appendLog({
-        timestamp: new Date().toISOString(),
-        action: "sync:batch",
-        result: "info",
-        message: "All skills are hidden or frozen; nothing to sync.",
-      });
-      return;
-    }
-    setBusy(true);
-    try {
-      const targets: ToolName[] = target === "both" ? ["claude", "codex"] : [target];
-      for (const skill of list) {
-        for (const tool of targets) {
-          const status = await api.syncSkillToTool(skill, tool);
-          setSyncStatus((prev) => ({
-            ...prev,
-            [skill.path]: { ...(prev[skill.path] ?? {}), [tool]: status },
-          }));
-        }
-      }
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function handleUnsupportedSync(tool: string): void {
-    window.alert(t("action.unsupportedAlert", { tool }));
+    await actions.syncOne(skill, toolName);
   }
 
   async function handleOpenRoot(): Promise<void> {
@@ -414,14 +377,28 @@ export function App() {
     minBottom: 200,
   });
 
-  // Horizontal split inside the detail panel: info on the left, actions on
-  // the right. Persisted independently so users can tune table-vs-detail and
-  // info-vs-actions without stepping on each other.
-  const detailSplit = useHorizontalSplit("ssm.split.detailLeft.v1", {
-    defaultLeft: 560,
-    minLeft: 280,
-    minRight: 220,
-  });
+  const onUnlinkFromTable = useCallback(
+    (skill: SkillInfo, tool: ToolName) => {
+      if (tool !== "claude" && tool !== "codex") return;
+      void actions.unlinkOne(skill, tool);
+    },
+    [actions],
+  );
+
+  const onBulkSyncFromBar = useCallback(
+    (tool: ToolName) => {
+      if (tool !== "claude" && tool !== "codex") return;
+      void actions.bulkSync(tool);
+    },
+    [actions],
+  );
+  const onBulkUnlinkFromBar = useCallback(
+    (tool: ToolName) => {
+      if (tool !== "claude" && tool !== "codex") return;
+      void actions.bulkUnlink(tool);
+    },
+    [actions],
+  );
 
   return (
     <div className="app">
@@ -446,6 +423,15 @@ export function App() {
         </div>
 
         <div className="content">
+          {skills.length > 0 ? (
+            <GlobalSyncBar
+              skills={skills}
+              syncStatus={syncStatus}
+              onBulkSync={onBulkSyncFromBar}
+              onBulkUnlink={onBulkUnlinkFromBar}
+            />
+          ) : null}
+
           <div
             ref={split.containerRef}
             className={`split-vertical ${split.dragging ? "split-dragging" : ""}`}
@@ -454,8 +440,11 @@ export function App() {
               <SkillTable
                 skills={skills}
                 syncStatus={syncStatus}
+                pending={actions.pending}
                 selectedPath={selectedSkillPath}
                 onSelect={setSelectedSkillPath}
+                onSync={handleSyncOne}
+                onUnlink={onUnlinkFromTable}
                 showHidden={showHidden}
                 onToggleShowHidden={setShowHidden}
               />
@@ -474,42 +463,12 @@ export function App() {
             <div className="split-bottom">
               <div className="panel skill-detail-panel">
                 <div className="panel-header">{t("detail.header")}</div>
-                <div
-                  ref={detailSplit.containerRef}
-                  className={`detail-split ${detailSplit.dragging ? "split-dragging" : ""}`}
-                >
-                  <div className="detail-split-left" style={{ width: detailSplit.leftWidth }}>
-                    <div className="panel-body detail-info-body">
-                      <SkillDetail
-                        skill={selectedSkill}
-                        syncStatus={selectedSyncStatus}
-                        onChangeMetadata={handleChangeMetadata}
-                      />
-                    </div>
-                  </div>
-
-                  <div
-                    className="split-handle split-handle-col"
-                    onMouseDown={detailSplit.onHandleMouseDown}
-                    role="separator"
-                    aria-orientation="vertical"
-                    title={t("split.resize")}
-                  >
-                    <span className="split-handle-grip" />
-                  </div>
-
-                  <div className="detail-split-right">
-                    <div className="panel-body detail-actions-body">
-                      <ActionPanel
-                        selectedSkill={selectedSkill}
-                        anySkills={skills.length > 0}
-                        busy={busy}
-                        onSyncOne={handleSyncOne}
-                        onSyncMany={handleSyncMany}
-                        onUnsupportedSync={handleUnsupportedSync}
-                      />
-                    </div>
-                  </div>
+                <div className="panel-body detail-info-body">
+                  <SkillDetail
+                    skill={selectedSkill}
+                    syncStatus={selectedSyncStatus}
+                    onChangeMetadata={handleChangeMetadata}
+                  />
                 </div>
               </div>
             </div>

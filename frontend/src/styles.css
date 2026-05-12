@@ -113,8 +113,7 @@ input[type="text"]:focus {
   width: 100vw;
   gap: 10px;
   padding: 14px;
-  /* Prevent any wide descendant from pushing the top-level grid past the
-     viewport — the whole tree below must fit within 100vw or scroll locally. */
+  /* 避免任何超宽的子元素把顶层 grid 撑出视口之外 —— 整棵树必须能在 100vw 内容纳，或自行局部滚动。 */
   min-width: 0;
   max-width: 100vw;
   overflow: hidden;
@@ -213,7 +212,7 @@ input[type="text"]:focus {
   min-width: 0;
 }
 
-/* Vertical split: table on top, detail below, drag-handle in between. */
+/* 上下分栏：表格在上、详情在下，中间是拖拽条。 */
 .split-vertical {
   flex: 1 1 auto;
   min-height: 0;
@@ -287,15 +286,14 @@ input[type="text"]:focus {
   cursor: row-resize;
 }
 
-/* Horizontal split inside the detail panel: info | handle | actions. */
+/* 详情面板内部的左右分栏：信息区 | 拖拽条 | 操作区。 */
 .detail-split {
   display: flex;
   flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
   overflow: hidden;
-  /* Enables @container queries so the split itself can restack to vertical
-     when the pane is too narrow, independent of viewport width. */
+  /* 启用 @container query：分栏本身可以在过窄时独立于视口宽度自行改为纵向堆叠。 */
   container-type: inline-size;
   container-name: detail-split;
 }
@@ -319,8 +317,7 @@ input[type="text"]:focus {
   flex-direction: column;
   overflow: hidden;
   border-left: 1px solid var(--panel-border);
-  /* Enables @container queries on descendants so the action grid can adapt
-     to pane width, independent of the viewport. */
+  /* 让子元素也启用 @container query：操作区的按钮网格可以按面板宽度自适应，不再受整体视口影响。 */
   container-type: inline-size;
   container-name: detail-right;
 }
@@ -348,13 +345,12 @@ input[type="text"]:focus {
 }
 
 .detail-actions-body {
-  /* Slightly tighter padding on the right pane — it's just buttons. */
+  /* 右侧面板内边距稍紧一些：里面主要是按钮。 */
   padding: 12px;
 }
 
-/* Narrow detail pane → restack vertically: info on top, handle becomes a
-   horizontal divider, actions below. Overrides the inline `width` pushed
-   onto .detail-split-left so the left pane fills the full width. */
+/* 详情面板过窄时改为纵向堆叠：信息在上，拖拽条变成横向分隔条，操作区在下。
+   覆盖内联宽度 —— 窄容器下不再按像素宽度分栏，而是整体流式排列。 */
 @container detail-split (max-width: 900px) {
   .detail-split {
     flex-direction: column;
@@ -481,15 +477,36 @@ input[type="text"]:focus {
   line-height: 1.4;
 }
 
-.badge.synced { background: var(--green-bg); color: var(--green); }
-.badge.missing { background: var(--gray-bg); color: var(--gray); }
-.badge.conflict { background: var(--orange-bg); color: var(--orange); }
-.badge.invalid { background: var(--red-bg); color: var(--red); }
-.badge.error { background: var(--red-bg); color: var(--red); }
-.badge.unsupported { background: var(--gray-bg); color: var(--gray); }
-.badge.ok { background: var(--green-bg); color: var(--green); }
-.badge.warn { background: var(--orange-bg); color: var(--orange); }
-.badge.bad { background: var(--red-bg); color: var(--red); }
+/* 徽章配色：绿色 = 正常、橙色 = 提醒、红色 = 错误、灰色 = 中性。
+   多个语义相同的类名共享同一组色值，避免后续加新状态时到处复制。 */
+.badge.synced,
+.badge.ok,
+.badge.inspector-kind-managed {
+  background: var(--green-bg);
+  color: var(--green);
+}
+.badge.conflict,
+.badge.warn,
+.badge.inspector-kind-shadowing {
+  background: var(--orange-bg);
+  color: var(--orange);
+}
+.badge.invalid,
+.badge.error,
+.badge.bad,
+.badge.inspector-kind-stray-link {
+  background: var(--red-bg);
+  color: var(--red);
+}
+.badge.missing,
+.badge.unsupported {
+  background: var(--gray-bg);
+  color: var(--gray);
+}
+.badge.inspector-kind-external {
+  background: #efe7ff;
+  color: #6a3ab4;
+}
 
 .skill-table-scroll {
   overflow-x: auto;
@@ -515,12 +532,11 @@ input[type="text"]:focus {
   padding: 8px 12px;
   border-bottom: 1px solid var(--panel-border);
   text-align: left;
-  /* Top-align so single-line and two-line cells in the same row sit on the
-     same visual baseline. Middle-align looks fine until one cell wraps,
-     then it makes neighbors feel off. */
+  /* 单元格顶对齐：让单行与多行内容在同一行里保持相同的视觉基线。
+     居中对齐在不换行时没问题，一旦某个单元格换行就会和相邻单元格脱节。 */
   vertical-align: top;
-  /* td must stay `display: table-cell` to keep row flow intact. All clamping
-     happens on the inner `.clamp` wrapper — never on the td itself. */
+  /* td 必须保持 `display: table-cell`，否则会破坏行级布局；
+     所有 clamp 都发生在内层 `.clamp` 包装上，绝不直接改 td。 */
   overflow: hidden;
 }
 
@@ -528,23 +544,22 @@ input[type="text"]:focus {
   white-space: normal;
 }
 
-/* Two-line clamp lives on an inner div so we don't break table layout.
-   Works in any Chromium-based engine (Wails uses WebView2 → Chromium). */
+/* 两行裁剪放在内层 div 上，以免破坏 table 布局。
+   任何 Chromium 内核都支持（Wails 用的是 WebView2 → Chromium）。 */
 .skill-table .clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  /* Allow arbitrary breakpoints so very long paths and URLs can wrap. */
+  /* 允许任意位置断行，这样很长的路径或 URL 也能折行。 */
   overflow-wrap: anywhere;
   word-break: break-word;
   line-height: 1.4;
-  /* Cap at two lines of rendered height — guarantees uniform row height
-     regardless of whether content wrapped. */
+  /* 最多渲染两行 —— 无论内容是否折行都保证每行高度一致。 */
   max-height: calc(1.4em * 2);
 }
 
-/* Single-line clamp (for the Name cell — badges + short name). */
+/* 单行裁剪（用于名称单元格：徽章 + 短名）。 */
 .skill-table .clamp-1 {
   display: block;
   overflow: hidden;
@@ -552,15 +567,15 @@ input[type="text"]:focus {
   white-space: nowrap;
 }
 
-/* Path column: monospace + two-line clamp, same mechanic. */
+/* Path 列：等宽字体 + 两行裁剪，机制同上。 */
 .skill-table td.path .clamp-2 {
   font-family: var(--mono);
   font-size: 11.5px;
   color: var(--text-muted);
 }
 
-/* Name column: name + optional frozen/hidden pills on one row. The name
-   itself clamps; the pills stay at a fixed size to the right. */
+/* Name 列：名称 + 可选的 frozen / hidden 小标签在一行内显示。
+   名称部分会裁剪；右侧小标签保持固定尺寸。 */
 .skill-table .name-cell {
   display: flex;
   align-items: center;
@@ -586,14 +601,20 @@ input[type="text"]:focus {
   color: var(--text-muted);
   letter-spacing: 0.02em;
   white-space: nowrap;
-  /* Keep room for the resizer on the right edge. */
+  /* 在右侧边缘预留出 resizer 的位置。 */
   padding-right: 16px;
 }
 
-/* Cells that hold a single badge (origin/valid/claude/codex) should stay on
-   one line — wrapping a 3-character status pill looks bad. */
+/* 放 badge 的单元格（origin / valid）保持单行，不因 3 字标签换行。
+   同步状态列 claude/codex 已合并成 tools，由 .tool-toggle-row 管理。 */
 .skill-table td.cell-badge {
   white-space: nowrap;
+}
+
+/* 表格内的工具按钮单元格：只需要纵向居中，水平自己布局。 */
+.skill-table td.cell-tools {
+  white-space: nowrap;
+  padding: 6px 10px;
 }
 
 .skill-table th .th-label {
@@ -653,10 +674,10 @@ input[type="text"]:focus {
   background: #dbe8f8;
 }
 
-/* Action panel: sits in the right pane of the detail split. Grouped into
-   sections, each with a small uppercase header and compact buttons laid out
-   in 2-column rows where the two actions are siblings (Claude + Codex) and
-   a full-width follow-up button for the combined case. */
+/* 操作面板：位于详情分栏的右侧。
+   分组呈现，每组有一个小号大写标题和若干紧凑按钮。
+   主要形式是 2 列按钮行（Claude + Codex 作为兄弟项），
+   组合操作下再跟一个整行宽度的后续按钮。 */
 .action-panel {
   display: flex;
   flex-direction: column;
@@ -680,16 +701,14 @@ input[type="text"]:focus {
   margin-bottom: 2px;
 }
 
-/* Two-column button row. Falls back gracefully at narrow widths by shrinking
-   content rather than overflowing. */
+/* 两列按钮行。过窄时内容会优雅收缩而不是溢出。 */
 .action-row-split {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 6px;
 }
 
-/* Below ~200px the two-column layout produces buttons too narrow to read.
-   Collapse to a single column. */
+/* 宽度小于约 200px 时，两列布局的按钮会窄得无法阅读，整体改为单列。 */
 @container detail-right (max-width: 220px) {
   .action-row-split {
     grid-template-columns: 1fr;
@@ -708,9 +727,8 @@ input[type="text"]:focus {
   min-width: 0;
 }
 
-/* Compact button variant for the action panel — shorter padding, smaller
-   font, centered text. Overrides the global button rule without touching
-   buttons elsewhere. */
+/* 操作面板的紧凑按钮变体：更小的内边距与字号、居中文字。
+   覆盖全局 button 样式而不影响其它按钮。 */
 .action-panel button.compact {
   padding: 4px 10px;
   font-size: 12.5px;
@@ -722,26 +740,25 @@ input[type="text"]:focus {
   text-overflow: ellipsis;
 }
 
-/* A full-width `.compact` button directly inside an action-section (i.e. not
-   part of a 2-column row-split) was rendering as a giant horizontal bar.
-   Let it size to its content and align to the start, so it reads as a
-   secondary action rather than a banner. */
+/* action-section 里直接放一个占满整行的 `.compact` 按钮
+   （即未包在 2 列 row-split 内的情况）时，它会被渲染成超长条；
+   这里让它按内容自适应宽度并靠左对齐，看起来更像次要操作、而不是一条横幅。 */
 .action-section > button.compact {
   align-self: flex-start;
   min-width: 140px;
   max-width: 100%;
 }
 
-/* Keep the 2-column row-split children full-width within their grid cell —
-   only the standalone button above should shrink. */
+/* 2 列 row-split 的子项在所在网格单元内保持 100% 宽度 ——
+   只有上面那种独立按钮才会被收窄。 */
 .action-row-split > button.compact {
   align-self: stretch;
   min-width: 0;
   width: 100%;
 }
 
-/* "Subtle" variant: low-contrast fill for secondary / combined actions so
-   the primary Claude & Codex buttons stand out. */
+/* "Subtle" 低对比度填充变体：用于次要或组合操作，
+   让主要的 Claude / Codex 按钮更突出。 */
 .action-panel button.subtle {
   background: #f4f6f8;
   color: var(--text);
@@ -754,7 +771,7 @@ input[type="text"]:focus {
   color: var(--accent);
 }
 
-/* Collapsible "unsupported tools" section — toggle header acts as button. */
+/* 可折叠的"尚未支持工具"区域：点击标题即展开 / 收起。 */
 .action-section-toggle {
   display: flex;
   align-items: center;
@@ -1058,10 +1075,7 @@ input[type="text"]:focus {
   font-size: 13px;
 }
 
-.badge.inspector-kind-managed { background: var(--green-bg); color: var(--green); }
-.badge.inspector-kind-shadowing { background: var(--orange-bg); color: var(--orange); }
-.badge.inspector-kind-external { background: #efe7ff; color: #6a3ab4; }
-.badge.inspector-kind-stray-link { background: var(--red-bg); color: var(--red); }
+/* inspector-kind-* 的颜色与上面的徽章语义合并声明，这里不再重复。 */
 
 .inspector-help {
   font-size: 12px;
@@ -1091,4 +1105,347 @@ input[type="text"]:focus {
   gap: 6px;
   flex-wrap: wrap;
   margin-top: 2px;
+}
+
+/* ===== 工具切换按钮（ToolToggle） =====
+   单源样式，行内按钮与全局栏按钮共用一套；全局栏加 --lg 修饰放大。
+   视觉分层顺序：底色 / 边框 / logo / 角标（conflict ! / invalid strike / busy spinner / partial count）。 */
+
+.tool-toggle-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tool-toggle {
+  --tool-accent: var(--accent);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 160ms ease-out, border-color 160ms ease-out, box-shadow 180ms ease-out,
+    color 160ms ease-out, transform 120ms ease-out, filter 160ms ease-out;
+}
+
+/* 扩展 hit-area 到 ≥28×28，不改变视觉尺寸（行内紧凑场景的可达性兜底）。 */
+.tool-toggle::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+}
+
+.tool-toggle--lg {
+  width: 34px;
+  height: 34px;
+}
+
+.tool-toggle-icon {
+  pointer-events: none;
+  display: block;
+  flex: none;
+}
+
+.tool-toggle:focus-visible {
+  outline: 2px solid var(--tool-accent);
+  outline-offset: 2px;
+}
+
+.tool-toggle:not(:disabled):hover {
+  background: var(--panel-hover);
+}
+.tool-toggle:not(:disabled):active {
+  transform: scale(0.94);
+}
+
+/* --- synced：高亮 logo + 品牌色描边 + 柔和光晕 --- */
+.tool-toggle--synced {
+  background: var(--green-bg);
+  border-color: var(--green);
+  color: var(--tool-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--green) 18%, transparent);
+}
+.tool-toggle--synced:not(:disabled):hover {
+  background: color-mix(in srgb, var(--green-bg) 80%, #fff 20%);
+}
+
+/* --- missing：灰态 logo --- */
+.tool-toggle--missing {
+  color: var(--text-muted);
+  filter: grayscale(1);
+  opacity: 0.65;
+}
+.tool-toggle--missing:not(:disabled):hover {
+  opacity: 1;
+  filter: grayscale(0.3);
+  color: var(--tool-accent);
+  border-color: color-mix(in srgb, var(--tool-accent) 40%, var(--panel-border));
+}
+
+/* --- conflict：橙色环 + 右上角 ! --- */
+.tool-toggle--conflict {
+  background: var(--orange-bg);
+  border-color: var(--orange);
+  color: var(--tool-accent);
+}
+.tool-toggle-conflict {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 12px;
+  height: 12px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 12px;
+  text-align: center;
+  color: #fff;
+  background: var(--orange);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1.5px var(--panel-bg);
+}
+
+/* --- invalid：灰底 + 虚线边 + 对角线 --- */
+.tool-toggle--invalid {
+  background: var(--gray-bg);
+  border-style: dashed;
+  border-color: var(--text-muted);
+  color: var(--text-muted);
+  cursor: not-allowed;
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+.tool-toggle-strike {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    to top right,
+    transparent calc(50% - 0.5px),
+    var(--text-muted) calc(50% - 0.5px),
+    var(--text-muted) calc(50% + 0.5px),
+    transparent calc(50% + 0.5px)
+  );
+  border-radius: inherit;
+}
+
+/* --- unsupported：未来工具占位 --- */
+.tool-toggle--unsupported {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--panel-border);
+  color: var(--text-muted);
+  cursor: not-allowed;
+  filter: grayscale(1);
+  opacity: 0.45;
+}
+
+.tool-toggle:disabled {
+  cursor: not-allowed;
+}
+
+/* --- busy：spinner 叠加 --- */
+.tool-toggle[data-busy="true"] {
+  pointer-events: none;
+}
+.tool-toggle-spinner {
+  position: absolute;
+  inset: -2px;
+  border: 2px dashed var(--tool-accent);
+  border-radius: inherit;
+  animation: tool-toggle-spin 900ms linear infinite;
+  pointer-events: none;
+  opacity: 0.7;
+}
+@keyframes tool-toggle-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tool-toggle,
+  .tool-toggle-spinner {
+    transition: none;
+    animation: none;
+  }
+}
+
+/* ===== GlobalSyncBar 与全局按钮的 partial 环 ===== */
+
+.global-sync-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+.global-sync-bar-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.global-sync-bar-buttons {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* partial 全局按钮：用 conic-gradient 画 synced/total 扇形环，
+   内侧再叠一个同色圆遮出中央，留 2px 环厚。 */
+.tool-toggle--partial {
+  background:
+    radial-gradient(circle, var(--green-bg) 0 calc(50% - 2.5px), transparent calc(50% - 2.5px)),
+    conic-gradient(var(--green) 0 var(--ring-ratio, 180deg), var(--panel-border) 0);
+  border-color: transparent;
+  color: var(--tool-accent);
+}
+.tool-toggle--partial:not(:disabled):hover {
+  filter: brightness(1.03);
+}
+
+/* partial 右下角小比例气泡 */
+.tool-toggle-count {
+  position: absolute;
+  right: -6px;
+  bottom: -4px;
+  min-width: 20px;
+  height: 14px;
+  padding: 0 4px;
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 14px;
+  color: var(--green);
+  background: var(--panel-bg);
+  border: 1px solid var(--green);
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* empty 聚合态：整个按钮禁用且淡显（同 unsupported 效果）。 */
+.tool-toggle--empty {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--panel-border);
+  color: var(--text-muted);
+  cursor: not-allowed;
+  filter: grayscale(1);
+  opacity: 0.35;
+}
+
+/* ===== Toast ===== */
+
+.toast-layer {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.toast-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 240px;
+  max-width: 380px;
+  padding: 10px 12px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+  font-size: 12.5px;
+  pointer-events: auto;
+  animation: toast-in 180ms ease-out;
+}
+
+.toast--success {
+  border-left-color: var(--green);
+}
+.toast--error {
+  border-left-color: var(--red);
+}
+.toast--info {
+  border-left-color: var(--accent);
+}
+
+.toast-msg {
+  flex: 1;
+  white-space: pre-wrap;
+  color: var(--text);
+}
+
+.toast-action {
+  flex: none;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  color: var(--accent);
+  cursor: pointer;
+}
+.toast-action:hover {
+  background: var(--accent-soft);
+}
+.toast-action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.toast-close {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.toast-close:hover {
+  background: var(--panel-hover);
+}
+
+@keyframes toast-in {
+  from {
+    transform: translateY(6px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
 }
