@@ -19,3 +19,6 @@ frontend/package.json.md5
 # Local env
 .env
 .env.local
+
+# Claude Code 本地设置（个人权限白名单，不入库）
+.claude/settings.local.json
