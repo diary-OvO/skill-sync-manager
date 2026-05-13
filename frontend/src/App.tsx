@@ -319,6 +319,19 @@ function AppInner() {
     }
   }
 
+  // 只负责刷 inspector 自己的数据。
+  //
+  // 之前这个函数还"顺手"重算全局 syncStatus —— 这是一个隐蔽的 bug 源：
+  //   migrate / import 的流程是
+  //     runScanFlow(sharedRoot)            <- 这里 skills 已经重新 scan、
+  //                                           syncStatus 也已按新 skills 全量刷过
+  //     handleRescanCli(tool)              <- 但这个函数闭包里的 skills 还是
+  //                                           更新前的旧数组，refreshSyncStatuses(旧)
+  //                                           算出的 map 里没有刚迁入的 skill,
+  //                                           再 setSyncStatus 把上一步写入的正确态
+  //                                           覆盖掉 —— 于是全局状态永远停在迁移前。
+  // 解法：职责单一化。inspector 面板自己的数据归 handleRescanCli，
+  // syncStatus 的刷新由调用方按需显式触发（runScanFlow 已经刷过就别再刷）。
   async function handleRescanCli(tool: SupportedTool): Promise<void> {
     if (!sharedRoot) {
       window.alert(t("root.noRootAlert"));
@@ -328,15 +341,21 @@ function AppInner() {
     try {
       const entries = await api.scanCliTool(tool, sharedRoot);
       setInspector((prev) => ({ ...prev, [tool]: entries }));
-      // 重扫 CLI 目录通常会解决 conflict，顺便刷新整体同步状态。
-      if (skills.length > 0) {
-        const map = await refreshSyncStatuses(skills);
-        setSyncStatus(map);
-      }
     } catch (err) {
       window.alert((err as Error).message);
     } finally {
       setInspectorBusy((prev) => ({ ...prev, [tool]: false }));
+    }
+  }
+
+  // 顶部"重扫 CLI"按钮走的路径：用户点这个是想看 CLI 侧的真实现状，
+  // 除了刷 inspector，也要刷 syncStatus —— 因为用户可能在别处删过 junction。
+  // 这里调 refreshSyncStatuses 时从当前 state 里拿 skills，所以拿到的是最新值。
+  async function handleRescanCliFromHeader(tool: SupportedTool): Promise<void> {
+    await handleRescanCli(tool);
+    if (skills.length > 0) {
+      const map = await refreshSyncStatuses(skills);
+      setSyncStatus(map);
     }
   }
 
@@ -405,6 +424,18 @@ function AppInner() {
     try {
       await api.unlinkSkill(entry.toolName as SupportedTool, entry.skillName);
       await handleRescanCli(entry.toolName as SupportedTool);
+      // unlink 只影响"这一个 skill × 这一个 tool"的同步状态（junction 被删了
+      // → 状态从 Synced 变成 Missing）。用 refreshOne 精准刷一格，避免全量
+      // refreshSyncStatuses 的开销。如果 skills 里找不到（极少见：共享根已被
+      // 删但 CLI 侧还有残留 link），就降级为全量刷 —— 那种情况下 syncStatus
+      // 本就该全量对一遍齐。
+      const target = skills.find((s) => s.name === entry.skillName);
+      if (target) {
+        await refreshOne(target, entry.toolName as SupportedTool);
+      } else if (skills.length > 0) {
+        const map = await refreshSyncStatuses(skills);
+        setSyncStatus(map);
+      }
       // unlink 只碰 CLI junction，不动共享根，但顺手刷一下避免漏掉边角情况。
       void refreshGitStatus();
     } catch (err) {
@@ -514,8 +545,8 @@ function AppInner() {
         onImport={handleImport}
         onOpenRoot={handleOpenRoot}
         onRefreshSync={handleRefreshSync}
-        onRescanClaude={() => handleRescanCli("claude")}
-        onRescanCodex={() => handleRescanCli("codex")}
+        onRescanClaude={() => handleRescanCliFromHeader("claude")}
+        onRescanCodex={() => handleRescanCliFromHeader("codex")}
         busy={busy}
       />
 
