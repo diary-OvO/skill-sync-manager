@@ -405,3 +405,155 @@ func ImportFromCli(toolName string, cliSkillName string, sharedRoot string, orig
 
 	return rescanSkill(sharedRoot, targetDir)
 }
+
+// MigrateFromCli 把 CLI 工具目录下真实存在的 skill **迁移**进共享根：
+//
+//	共享根        <- 真身在这里
+//	  └─ SkillX/  (真实目录, SKILL.md 等)
+//	CLI/skills/
+//	  └─ SkillX   (junction) ──→ 共享根/SkillX
+//
+// 语义与 ImportFromCli 的关键区别：
+//  1. 导入完成后 CLI 原目录不再是真实目录，而是 junction，从此不再
+//     产生 shadowing 冲突；CheckSyncStatus 会直接判为 Synced。
+//  2. origin 固定为 "owned"——既然用户要把 skill 的"权威副本"纳入
+//     共享根托管，该 skill 就是自建、可编辑的。
+//
+// 事务顺序与回滚：
+//
+//	step1  copy CLI 真实目录 -> 共享根/<name>
+//	       失败: 清理可能产生的 共享根/<name> 残片, 直接返回
+//	step2  rename CLI 原目录 -> CLI/.migrating-<name>
+//	       失败: 删 step1 产物 (共享根/<name>), 返回
+//	step3  在 CLI 原位置创建 junction -> 共享根/<name>
+//	       失败: 删 step1 产物 + 把 .migrating-<name> 改回原名, 返回
+//	step4  删 CLI/.migrating-<name>
+//	       失败: 不回滚 (junction 已生效, 用户只是多一份 tmp),
+//	            返回"迁移成功但需手动删 tmp"的软警告错误
+//	step5  写 registry
+//	       失败: 不回滚物理文件 (skill 已可用),
+//	            返回"迁移成功但 registry 未写入"的软警告错误
+//
+// 这样任何前三步失败 CLI 原目录都一定还在原位、仍是真实目录，
+// 用户不会因为一次迁移丢数据。
+func MigrateFromCli(toolName string, cliSkillName string, sharedRoot string) (models.SkillInfo, error) {
+	var zero models.SkillInfo
+	if cliSkillName == "" {
+		return zero, fmt.Errorf("CLI skill name must not be empty")
+	}
+	if sharedRoot == "" {
+		return zero, fmt.Errorf("shared root must not be empty")
+	}
+	if rootInfo, err := os.Stat(sharedRoot); err != nil || !rootInfo.IsDir() {
+		return zero, fmt.Errorf("shared skill root does not exist: %s", sharedRoot)
+	}
+
+	cliDir, err := synctargets.GetTargetDir(toolName)
+	if err != nil {
+		return zero, err
+	}
+	source := filepath.Join(cliDir, cliSkillName)
+
+	// 只迁移真实目录。如果源已经是 junction 说明已经托管在共享根了，
+	// 再迁移会破坏 junction 导致一个 skill 被指两次。
+	if symlinkwindows.IsLinkPath(source) {
+		return zero, fmt.Errorf(
+			"%s is already a junction/symlink, nothing to migrate.",
+			source,
+		)
+	}
+	if st, err := os.Stat(source); err != nil || !st.IsDir() {
+		return zero, fmt.Errorf("CLI skill source is not a directory: %s", source)
+	}
+	skillMd := filepath.Join(source, "SKILL.md")
+	if st, err := os.Stat(skillMd); err != nil || st.IsDir() {
+		return zero, fmt.Errorf("CLI skill folder does not contain SKILL.md: %s", source)
+	}
+
+	parsed, _ := ParseSkillMarkdown(skillMd)
+	targetName := parsed.Name
+	if targetName == "" {
+		targetName = cliSkillName
+	}
+	targetDir := filepath.Join(sharedRoot, targetName)
+
+	// 共享根侧必须是"干净的"。如果已经存在同名目录，直接拒绝 ——
+	// 用户现在的问题恰恰就是"共享根里已有同名 skill 才 shadowing"，
+	// 此时盲目覆盖会丢数据。让调用方先 UnlinkSkill / 人工合并。
+	if err := ensureTargetAbsent(
+		targetDir,
+		"The shared root already has a skill with this name. Resolve the conflict before migrating.",
+	); err != nil {
+		return zero, err
+	}
+
+	// Windows 上没有 symlink 能力就连 junction 都建不了，直接劝退；
+	// 避免"复制成功但没法建链接"这种半成品状态。
+	if !symlinkwindows.IsWindows() {
+		return zero, fmt.Errorf("migrate is only supported on Windows")
+	}
+
+	// ---- step1 复制 ----
+	if err := copyDirectory(source, targetDir); err != nil {
+		// copyDirectory 内部失败时大多不会自己清理半成品。
+		_ = os.RemoveAll(targetDir)
+		return zero, fmt.Errorf("failed to copy skill into shared root: %v", err)
+	}
+
+	// ---- step2 重命名原 CLI 目录为 .migrating-<name> ----
+	tmpPath := filepath.Join(cliDir, ".migrating-"+cliSkillName)
+	// 兜底：若残留同名 tmp（上次中断），先清掉再改名，避免 Rename 失败。
+	_ = os.RemoveAll(tmpPath)
+	if err := os.Rename(source, tmpPath); err != nil {
+		_ = os.RemoveAll(targetDir)
+		return zero, fmt.Errorf("failed to stage CLI source for migration: %v", err)
+	}
+
+	// ---- step3 在 CLI 原位置建 junction ----
+	if err := symlinkwindows.CreateDirectoryJunction(source, targetDir); err != nil {
+		// 回滚顺序：先撤 junction 可能的半成品（保险起见），
+		// 再把 tmp 改回原名，最后删共享根的副本。
+		_ = os.RemoveAll(source)
+		if rnErr := os.Rename(tmpPath, source); rnErr != nil {
+			// 极端情况：连 rename 都失败。这时 CLI 原目录处于 tmp 状态，
+			// 共享根副本也还在。把两者信息都抛出去，让用户能手动恢复。
+			return zero, fmt.Errorf(
+				"failed to create junction (%v) AND failed to rollback CLI source (%v). "+
+					"Manual fix: rename %s back to %s, then delete %s",
+				err, rnErr, tmpPath, source, targetDir,
+			)
+		}
+		_ = os.RemoveAll(targetDir)
+		return zero, fmt.Errorf("failed to create junction: %v", err)
+	}
+
+	// ---- step4 删 .migrating-<name> ----
+	// 这一步失败不回滚：junction 已经生效，功能可用，只是 tmp 残留。
+	// 把警告编码进 err 抛给上层，UI 可以弹 toast 告知用户去手动删。
+	var tmpCleanupWarning error
+	if err := os.RemoveAll(tmpPath); err != nil {
+		tmpCleanupWarning = fmt.Errorf(
+			"migration succeeded but failed to remove staging folder %s: %v",
+			tmpPath, err,
+		)
+	}
+
+	// ---- step5 写 registry ----
+	reg, _ := registry.Load(sharedRoot)
+	reg.Set(targetName, registry.Entry{
+		Origin:         models.SkillOriginOwned,
+		ImportedFrom:   source,
+		ImportedAtUnix: time.Now().Unix(),
+	})
+	if err := registry.Save(sharedRoot, reg); err != nil {
+		// 同 ImportFromCli 的选择：物理状态已一致，只是元数据缺失。
+		info, _ := rescanSkill(sharedRoot, targetDir)
+		return info, fmt.Errorf("migrated but registry write failed: %v", err)
+	}
+
+	info, err := rescanSkill(sharedRoot, targetDir)
+	if err != nil {
+		return info, err
+	}
+	return info, tmpCleanupWarning
+}

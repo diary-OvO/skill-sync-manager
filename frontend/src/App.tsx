@@ -420,6 +420,33 @@ function AppInner() {
       window.alert(t("root.noRootAlert"));
       return;
     }
+    // owned 走"迁移"语义：把 CLI 真实目录搬进共享根，CLI 原位置留 junction。
+    // 这样后续不会再产生 shadowing 冲突，CheckSyncStatus 直接判 Synced。
+    // 因为是破坏性操作（要删 CLI 原目录再建链接），先弹 confirm 让用户知情。
+    if (origin === "owned") {
+      const confirmed = window.confirm(
+        t("inspector.confirm.migrate", { path: entry.path }),
+      );
+      if (!confirmed) return;
+      try {
+        const skill = await api.migrateCliSkillToShared(
+          entry.toolName as SupportedTool,
+          entry.skillName,
+          sharedRoot,
+        );
+        await runScanFlow(sharedRoot);
+        setSelectedSkillPath(skill.path);
+        await handleRescanCli(entry.toolName as SupportedTool);
+        void refreshGitStatus();
+      } catch (err) {
+        window.alert((err as Error).message);
+      }
+      return;
+    }
+
+    // vendored 仍走"只复制"语义：第三方 skill 的"权威副本"留在 CLI 那边，
+    // 共享根这份只是被记录的 vendored 引用。继续会产生 shadowing，
+    // 但这是符合预期的 —— 用户对外部 skill 不打算改。
     try {
       const skill = await api.importSkillFromCli(
         entry.toolName as SupportedTool,
@@ -430,7 +457,6 @@ function AppInner() {
       await runScanFlow(sharedRoot);
       setSelectedSkillPath(skill.path);
       await handleRescanCli(entry.toolName as SupportedTool);
-      // 从 CLI 导入 = 把外部目录复制进共享根，几乎必然让 git 变脏。
       void refreshGitStatus();
     } catch (err) {
       window.alert((err as Error).message);

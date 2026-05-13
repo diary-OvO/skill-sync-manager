@@ -350,6 +350,27 @@ func (a *App) ImportSkillFromCli(toolName string, cliSkillName string, sharedRoo
 	return skill, nil
 }
 
+// MigrateCliSkillToShared 把 CLI 工具目录下的真实 skill 迁移进共享根：
+// 共享根保留真身（origin=owned），CLI 原位置改成 junction 指回共享根。
+// 完成后就不再有 shadowing 冲突，CheckSyncStatus 会直接判为 Synced。
+//
+// 这是破坏性操作：会改名 CLI 原目录、建 junction、删 staging tmp。
+// 任何一步失败都会按事务回滚，CLI 原目录保证留在原位。
+func (a *App) MigrateCliSkillToShared(toolName string, cliSkillName string, sharedRoot string) (models.SkillInfo, error) {
+	skill, err := skillscanner.MigrateFromCli(toolName, cliSkillName, sharedRoot)
+	if err != nil {
+		// 即便 skill 非零也可能带软警告 err（registry / tmp 清理失败），
+		// 此时物理迁移已完成但元数据缺失或留有残留，日志里必须记错误。
+		a.logError("cli:migrate", err.Error())
+		return skill, err
+	}
+	a.logSuccess(
+		"cli:migrate",
+		fmt.Sprintf("Migrated %s from %s into shared root (now linked via junction).", skill.Name, toolName),
+	)
+	return skill, nil
+}
+
 // SkillMetadataPatch 是 SetSkillMetadata 的入参。
 // 任何指针字段为 nil 时表示不修改，这样前端可以只发送刚被切换的那一项。
 type SkillMetadataPatch struct {

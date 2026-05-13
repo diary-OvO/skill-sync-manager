@@ -34,6 +34,10 @@ export function LogHistory() {
   return window['go']['main']['App']['LogHistory']();
 }
 
+export function MigrateCliSkillToShared(arg1, arg2, arg3) {
+  return window['go']['main']['App']['MigrateCliSkillToShared'](arg1, arg2, arg3);
+}
+
 export function OpenPath(arg1) {
   return window['go']['main']['App']['OpenPath'](arg1);
 }

@@ -7,6 +7,7 @@ import {
   ImportSkillFromCli,
   LoadSettings,
   LogHistory,
+  MigrateCliSkillToShared,
   OpenPath,
   QuitApp,
   RefreshSyncStatuses,
@@ -76,6 +77,15 @@ export const wailsApi = {
     origin: SkillOrigin,
   ): Promise<SkillInfo> =>
     bridge(ImportSkillFromCli(toolName, cliSkillName, sharedRoot, origin)),
+  // migrateCliSkillToShared 与 importSkillFromCli 的区别：后者只复制，
+  // 前者还会把 CLI 原目录替换成 junction —— 从此不再有 shadowing。
+  // origin 固定 owned，所以没有 origin 入参。
+  migrateCliSkillToShared: (
+    toolName: SupportedTool,
+    cliSkillName: string,
+    sharedRoot: string,
+  ): Promise<SkillInfo> =>
+    bridge(MigrateCliSkillToShared(toolName, cliSkillName, sharedRoot)),
   setSkillMetadata: (
     sharedRoot: string,
     skillName: string,

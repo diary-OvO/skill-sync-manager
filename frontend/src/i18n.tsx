@@ -166,7 +166,7 @@ const messages: Record<Lang, MessageTree> = {
       },
       action: {
         unlink: "Unlink",
-        importOwned: "Import as owned",
+        importOwned: "Migrate as owned",
         importVendored: "Import as vendored",
         open: "Open folder",
         ignore: "Ignore",
@@ -175,6 +175,8 @@ const messages: Record<Lang, MessageTree> = {
       },
       confirm: {
         unlink: "Remove the junction at {path}? The real files it points at are untouched.",
+        migrate:
+          "Migrate {path} into the shared root?\n\nThe real folder will be moved into the shared root, and the CLI location will be replaced with a junction pointing to it. The skill stays accessible to the CLI tool, just managed from the shared root.",
       },
       emptyForTool: "No entries scanned for {tool} yet.",
       ignored: {
@@ -358,7 +360,7 @@ const messages: Record<Lang, MessageTree> = {
       },
       action: {
         unlink: "解除链接",
-        importOwned: "导入为 自建",
+        importOwned: "迁移为 自建",
         importVendored: "导入为 下载",
         open: "打开目录",
         ignore: "忽略此项",
@@ -367,6 +369,8 @@ const messages: Record<Lang, MessageTree> = {
       },
       confirm: {
         unlink: "移除位于 {path} 的链接？目标数据本身不会被删除。",
+        migrate:
+          "确定将 {path} 迁移进共享根吗？\n\n操作会把真实目录搬进共享根，CLI 原位置替换为 junction（软链）指过来。CLI 工具看到的 skill 还在，但权威副本由共享根托管。",
       },
       emptyForTool: "尚未扫描 {tool} 的条目。",
       ignored: {

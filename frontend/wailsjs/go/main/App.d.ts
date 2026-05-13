@@ -20,6 +20,8 @@ export function LoadSettings():Promise<models.AppSettings>;
 
 export function LogHistory():Promise<Array<models.LogEntry>>;
 
+export function MigrateCliSkillToShared(arg1:string,arg2:string,arg3:string):Promise<models.SkillInfo>;
+
 export function OpenPath(arg1:string):Promise<void>;
 
 export function QuitApp():Promise<void>;
