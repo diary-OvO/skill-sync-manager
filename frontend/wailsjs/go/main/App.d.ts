@@ -4,6 +4,8 @@ import {models} from '../models';
 import {registry} from '../models';
 import {main} from '../models';
 
+export function CheckForUpdate():Promise<models.UpdateInfo>;
+
 export function CheckSyncStatus(arg1:models.SkillInfo,arg2:string):Promise<models.SyncStatus>;
 
 export function DetectCliTools():Promise<Array<models.ToolStatus>>;
@@ -15,6 +17,8 @@ export function GetRegistry(arg1:string):Promise<registry.Registry>;
 export function ImportSkillFolder(arg1:string,arg2:string):Promise<models.SkillInfo>;
 
 export function ImportSkillFromCli(arg1:string,arg2:string,arg3:string,arg4:string):Promise<models.SkillInfo>;
+
+export function InstallUpdate():Promise<models.UpdateInstallResult>;
 
 export function LoadSettings():Promise<models.AppSettings>;
 

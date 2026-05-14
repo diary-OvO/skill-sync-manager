@@ -11,12 +11,42 @@ import (
 
 func TestUnsupportedTool(t *testing.T) {
 	skill := models.SkillInfo{Name: "x", Valid: true}
-	status, err := CheckSyncStatus(skill, "gemini")
+	status, err := CheckSyncStatus(skill, "hermes")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if status.State != models.SyncStateUnsupported {
 		t.Errorf("expected unsupported, got %q", status.State)
+	}
+}
+
+func TestTargetDirsUseConfiguredToolPaths(t *testing.T) {
+	fakeHome := t.TempDir()
+	t.Setenv("USERPROFILE", fakeHome)
+	t.Setenv("HOME", fakeHome)
+
+	cases := map[string]string{
+		"claude":   filepath.Join(fakeHome, ".claude", "skills"),
+		"codex":    filepath.Join(fakeHome, ".codex", "skills"),
+		"gemini":   filepath.Join(fakeHome, ".gemini", "skills"),
+		"opencode": filepath.Join(fakeHome, ".config", "opencode", "skills"),
+	}
+	for tool, want := range cases {
+		got, err := GetTargetDir(tool)
+		if err != nil {
+			t.Fatalf("%s target dir: %v", tool, err)
+		}
+		if got != want {
+			t.Errorf("%s target dir = %q, want %q", tool, got, want)
+		}
+	}
+}
+
+func TestGeminiAndOpenCodeAreSupported(t *testing.T) {
+	for _, tool := range []string{"gemini", "opencode"} {
+		if !models.IsSupportedTool(tool) {
+			t.Fatalf("%s should be supported", tool)
+		}
 	}
 }
 

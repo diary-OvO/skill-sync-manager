@@ -171,6 +171,68 @@ export namespace models {
 	        this.supported = source["supported"];
 	    }
 	}
+	export class UpdateInfo {
+	    currentVersion: string;
+	    latestVersion: string;
+	    updateAvailable: boolean;
+	    releaseUrl: string;
+	    releaseNotes: string;
+	    publishedAt: string;
+	    assetName: string;
+	    assetUrl: string;
+	    assetSize: number;
+	    assetKind: string;
+	    installSupported: boolean;
+	    canInstall: boolean;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new UpdateInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.currentVersion = source["currentVersion"];
+	        this.latestVersion = source["latestVersion"];
+	        this.updateAvailable = source["updateAvailable"];
+	        this.releaseUrl = source["releaseUrl"];
+	        this.releaseNotes = source["releaseNotes"];
+	        this.publishedAt = source["publishedAt"];
+	        this.assetName = source["assetName"];
+	        this.assetUrl = source["assetUrl"];
+	        this.assetSize = source["assetSize"];
+	        this.assetKind = source["assetKind"];
+	        this.installSupported = source["installSupported"];
+	        this.canInstall = source["canInstall"];
+	        this.message = source["message"];
+	    }
+	}
+	export class UpdateInstallResult {
+	    started: boolean;
+	    message: string;
+	    version: string;
+	    assetName: string;
+	    downloadPath: string;
+	    stagedPath: string;
+	    logPath: string;
+	    sha256: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new UpdateInstallResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.started = source["started"];
+	        this.message = source["message"];
+	        this.version = source["version"];
+	        this.assetName = source["assetName"];
+	        this.downloadPath = source["downloadPath"];
+	        this.stagedPath = source["stagedPath"];
+	        this.logPath = source["logPath"];
+	        this.sha256 = source["sha256"];
+	    }
+	}
 
 }
 

@@ -1,4 +1,6 @@
 import { useLanguage } from "../i18n";
+import { TOOL_LABEL } from "../assets/toolLogos";
+import { SUPPORTED_TOOLS, type SupportedTool } from "../types";
 
 interface Props {
   value: string;
@@ -8,8 +10,9 @@ interface Props {
   onImport: () => void;
   onOpenRoot: () => void;
   onRefreshSync: () => void;
-  onRescanClaude: () => void;
-  onRescanCodex: () => void;
+  onRescanTool: (tool: SupportedTool) => void;
+  onCheckUpdate: () => void;
+  checkingUpdate: boolean;
   busy: boolean;
 }
 
@@ -22,8 +25,9 @@ export function RootSelector(props: Props) {
     onImport,
     onOpenRoot,
     onRefreshSync,
-    onRescanClaude,
-    onRescanCodex,
+    onRescanTool,
+    onCheckUpdate,
+    checkingUpdate,
     busy,
   } = props;
   const { t, lang, setLang } = useLanguage();
@@ -48,18 +52,20 @@ export function RootSelector(props: Props) {
         {t("root.refreshSync")}
       </button>
       <span className="top-bar-sep" />
-      <button onClick={onRescanClaude} disabled={busy || !value}>
-        {t("root.rescanClaude")}
-      </button>
-      <button onClick={onRescanCodex} disabled={busy || !value}>
-        {t("root.rescanCodex")}
-      </button>
+      {SUPPORTED_TOOLS.map((tool) => (
+        <button key={tool} onClick={() => onRescanTool(tool)} disabled={busy || !value}>
+          {t("root.rescanTool", { tool: TOOL_LABEL[tool] })}
+        </button>
+      ))}
       <span className="top-bar-sep" />
       <button onClick={onImport} disabled={busy || !value}>
         {t("root.import")}
       </button>
       <button onClick={onOpenRoot} disabled={busy || !value} className="ghost">
         {t("root.open")}
+      </button>
+      <button onClick={onCheckUpdate} disabled={busy || checkingUpdate} className="ghost">
+        {checkingUpdate ? t("update.checking") : t("update.check")}
       </button>
 
       <div className="lang-switch">

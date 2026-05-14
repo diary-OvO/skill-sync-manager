@@ -3,7 +3,7 @@
 > Language: [简体中文](./README.md) · **English**
 
 A Windows-first sync manager for Agent Skills.
-Sync one shared skill repository to Claude Code, OpenAI Codex, and other CLI agent tools so each skill is maintained once and reused everywhere.
+Sync one shared skill repository to Claude Code, OpenAI Codex, Gemini CLI, OpenCode, and other CLI agent tools so each skill is maintained once and reused everywhere.
 
 ## Inspiration
 
@@ -16,7 +16,7 @@ Skill Sync Manager is therefore intentionally narrower: it does not switch provi
 ## ✨ Key Features
 
 - **Unified management:** Keep all Agent Skills in one shared root instead of maintaining duplicated folders across tools.
-- **One-click sync:** Sync skills to Claude Code and OpenAI Codex through Windows directory junctions.
+- **One-click sync:** Sync skills to Claude Code, OpenAI Codex, Gemini CLI, and OpenCode through Windows directory junctions.
 - **Visible status:** See scan results, sync state, conflicts, CLI detection, Git status, and backend command logs.
 
 ## Setup and Usage
@@ -63,10 +63,18 @@ build/bin/skill-sync-manager.exe
 
 ## Basic Flow
 
-1. Choose a shared skill root, for example `D:\AgentSkills`.
+1. Choose a shared skill root, for example `~/.agents/skills` or `D:\AgentSkills`.
 2. Click `Scan` to find skill folders containing `SKILL.md`.
-3. Select a skill and sync it to Claude Code or OpenAI Codex.
+3. Select a skill and sync it to Claude Code, OpenAI Codex, Gemini CLI, or OpenCode.
 4. Check the log panel for backend command status and sync results.
+
+## Default Path Mapping
+
+- Shared root: `~/.agents/skills`
+- Claude Code: `~/.claude/skills`
+- OpenAI Codex: `~/.codex/skills`
+- Gemini CLI: `~/.gemini/skills`
+- OpenCode: `~/.config/opencode/skills`
 
 ## Tech Stack
 
@@ -79,8 +87,8 @@ build/bin/skill-sync-manager.exe
 
 ## Current Status
 
-- Claude Code and OpenAI Codex are supported.
-- Gemini CLI, OpenCode, and Hermes are placeholder targets for now.
+- Claude Code, OpenAI Codex, Gemini CLI, and OpenCode are supported.
+- Hermes is a placeholder target for now.
 - Sync is currently Windows-only.
 - Git is read-only and used for status display only.
 - Conflicting target folders are never overwritten and must be handled manually.

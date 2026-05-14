@@ -47,15 +47,15 @@ jobs:
         run: npm test
 
       - name: Build Windows app
-        run: wails build -clean
+        run: wails build -clean -ldflags "-X skill-sync-manager/internal/version.Version=${{ github.ref_name }}"
 
       - name: Package release assets
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force release | Out-Null
-          Compress-Archive `
-            -Path build/bin/skill-sync-manager.exe `
-            -DestinationPath "release/skill-sync-manager-${{ github.ref_name }}-windows-amd64.zip" `
+          Copy-Item `
+            -LiteralPath build/bin/skill-sync-manager.exe `
+            -Destination "release/skill-sync-manager-${{ github.ref_name }}-windows-amd64.exe" `
             -Force
 
       - name: Create or update GitHub Release

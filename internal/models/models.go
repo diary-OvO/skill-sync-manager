@@ -68,6 +68,33 @@ type AppSettings struct {
 	SharedRoot *string `json:"sharedRoot"`
 }
 
+type UpdateInfo struct {
+	CurrentVersion   string `json:"currentVersion"`
+	LatestVersion    string `json:"latestVersion"`
+	UpdateAvailable  bool   `json:"updateAvailable"`
+	ReleaseURL       string `json:"releaseUrl"`
+	ReleaseNotes     string `json:"releaseNotes"`
+	PublishedAt      string `json:"publishedAt"`
+	AssetName        string `json:"assetName"`
+	AssetURL         string `json:"assetUrl"`
+	AssetSize        int64  `json:"assetSize"`
+	AssetKind        string `json:"assetKind"`
+	InstallSupported bool   `json:"installSupported"`
+	CanInstall       bool   `json:"canInstall"`
+	Message          string `json:"message"`
+}
+
+type UpdateInstallResult struct {
+	Started      bool   `json:"started"`
+	Message      string `json:"message"`
+	Version      string `json:"version"`
+	AssetName    string `json:"assetName"`
+	DownloadPath string `json:"downloadPath"`
+	StagedPath   string `json:"stagedPath"`
+	LogPath      string `json:"logPath"`
+	SHA256       string `json:"sha256"`
+}
+
 type LogEntry struct {
 	Timestamp string `json:"timestamp"`
 	Action    string `json:"action"`
@@ -110,8 +137,8 @@ type CliSkillEntry struct {
 	SharedRootPath string `json:"sharedRootPath,omitempty"`
 }
 
-var SupportedTools = []string{"claude", "codex"}
-var UnsupportedTools = []string{"gemini", "opencode", "hermes"}
+var SupportedTools = []string{"claude", "codex", "gemini", "opencode"}
+var UnsupportedTools = []string{"hermes"}
 
 func AllTools() []string {
 	all := make([]string, 0, len(SupportedTools)+len(UnsupportedTools))

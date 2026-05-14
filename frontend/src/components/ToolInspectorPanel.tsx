@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { CliSkillEntry, SupportedTool } from "../types";
 import { useLanguage } from "../i18n";
+import { TOOL_LABEL } from "../assets/toolLogos";
 
 interface Props {
   tool: SupportedTool;
@@ -28,7 +29,7 @@ export function ToolInspectorPanel({
   onClose,
 }: Props) {
   const { t } = useLanguage();
-  const toolLabel = tool === "claude" ? "Claude" : "Codex";
+  const toolLabel = TOOL_LABEL[tool];
   const [showIgnored, setShowIgnored] = useState(false);
 
   // 把 external 条目里已经被用户忽略的路径过滤掉；

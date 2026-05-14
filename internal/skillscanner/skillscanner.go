@@ -323,7 +323,7 @@ func copyFile(src, dest string) error {
 	return err
 }
 
-// ImportFromCli 把某个 CLI 工具（例如 Claude / Codex）skills 目录下
+// ImportFromCli 把某个 CLI 工具（例如 Claude / Codex / Gemini / OpenCode）skills 目录下
 // 已经存在的真实 skill 目录复制进共享根，并在注册表中记录其来源。
 // CLI 原始目录不会被动到，是否删除并改用 junction 由调用方决定。
 //

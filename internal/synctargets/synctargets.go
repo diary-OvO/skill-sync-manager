@@ -44,6 +44,22 @@ func GetCodexSkillsDir() (string, error) {
 	return filepath.Join(h, ".codex", "skills"), nil
 }
 
+func GetGeminiSkillsDir() (string, error) {
+	h, err := getHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(h, ".gemini", "skills"), nil
+}
+
+func GetOpenCodeSkillsDir() (string, error) {
+	h, err := getHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(h, ".config", "opencode", "skills"), nil
+}
+
 // GetTargetDir 返回某个工具的 skills 目录。
 // 即使是尚未支持的工具也会返回一个占位路径，方便前端显示。
 func GetTargetDir(toolName string) (string, error) {
@@ -52,6 +68,10 @@ func GetTargetDir(toolName string) (string, error) {
 		return GetClaudeSkillsDir()
 	case "codex":
 		return GetCodexSkillsDir()
+	case "gemini":
+		return GetGeminiSkillsDir()
+	case "opencode":
+		return GetOpenCodeSkillsDir()
 	default:
 		h, err := getHomeDir()
 		if err != nil {

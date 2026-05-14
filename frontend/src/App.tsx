@@ -10,7 +10,9 @@ import type {
   SyncStatus,
   ToolName,
   ToolStatus,
+  UpdateInfo,
 } from "./types";
+import { SUPPORTED_TOOLS, isSupportedTool } from "./types";
 import { RootSelector } from "./components/RootSelector";
 import { GitStatusPanel } from "./components/GitStatusPanel";
 import { ToolStatusPanel } from "./components/ToolStatusPanel";
@@ -21,20 +23,36 @@ import { LogPanel } from "./components/LogPanel";
 import { ToolInspectorPanel } from "./components/ToolInspectorPanel";
 import { ToastProvider, useToast } from "./components/Toast";
 import { ScanProgressOverlay } from "./components/ScanProgressOverlay";
+import { UpdateNotice } from "./components/UpdateNotice";
 import { useVerticalSplit } from "./hooks/useDragResize";
 import { useShutdownCleanup } from "./hooks/useShutdownCleanup";
 import { useSyncActions, type SyncStatusMap } from "./hooks/useSyncActions";
 import { useIgnoredPaths } from "./hooks/useIgnoredPaths";
 import { useGitAutoRefresh } from "./hooks/useGitAutoRefresh";
 import { useLanguage } from "./i18n";
+import { TOOL_LABEL } from "./assets/toolLogos";
 
 // 向后兼容：历史上 SyncStatusMap 在 App.tsx 导出，现在搬到 hooks 里，保留 re-export。
 export type { SyncStatusMap } from "./hooks/useSyncActions";
 
-type InspectorState = {
-  claude: CliSkillEntry[];
-  codex: CliSkillEntry[];
-};
+type InspectorState = Record<SupportedTool, CliSkillEntry[]>;
+
+function createInspectorState(): InspectorState {
+  return SUPPORTED_TOOLS.reduce((acc, tool) => {
+    acc[tool] = [];
+    return acc;
+  }, {} as InspectorState);
+}
+
+function createInspectorBusyState(): Record<SupportedTool, boolean> {
+  return SUPPORTED_TOOLS.reduce(
+    (acc, tool) => {
+      acc[tool] = false;
+      return acc;
+    },
+    {} as Record<SupportedTool, boolean>,
+  );
+}
 
 function isWindowsPlatform(): boolean {
   if (typeof navigator === "undefined") return false;
@@ -67,12 +85,15 @@ function AppInner() {
   const [busy, setBusy] = useState(false);
   const [platformWarning, setPlatformWarning] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
-  const [inspector, setInspector] = useState<InspectorState>({ claude: [], codex: [] });
-  const [inspectorBusy, setInspectorBusy] = useState<Record<SupportedTool, boolean>>({
-    claude: false,
-    codex: false,
-  });
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [installingUpdate, setInstallingUpdate] = useState(false);
+  const [inspector, setInspector] = useState<InspectorState>(() => createInspectorState());
+  const [inspectorBusy, setInspectorBusy] = useState<Record<SupportedTool, boolean>>(() =>
+    createInspectorBusyState(),
+  );
   const didInit = useRef(false);
+  const didAutoCheckUpdate = useRef(false);
   // 保存 Wails "log:entry" 的取消订阅函数，关闭时优先用它来清理。
   // React 卸载清理在 pagehide / 窗口关闭时可能来不及触发，因此这里用 ref 兜底。
   const logUnsubRef = useRef<(() => void) | null>(null);
@@ -195,6 +216,56 @@ function AppInner() {
     logLocal,
   });
 
+  const checkForUpdate = useCallback(
+    async (manual: boolean): Promise<void> => {
+      setCheckingUpdate(true);
+      try {
+        const info = await api.checkForUpdate();
+        setUpdateInfo(info.updateAvailable ? info : null);
+        if (info.updateAvailable) {
+          toast.push({
+            kind: "info",
+            message: t("update.toastAvailable", { version: info.latestVersion }),
+            timeout: manual ? 8000 : 6000,
+          });
+        } else if (manual) {
+          toast.push({
+            kind: "success",
+            message: t("update.toastLatest", { version: info.currentVersion }),
+          });
+        }
+      } catch (err) {
+        const msg = (err as Error).message;
+        logLocal("update.check", "error", msg);
+        if (manual) {
+          toast.push({ kind: "error", message: t("update.toastCheckFailed", { message: msg }) });
+        }
+      } finally {
+        setCheckingUpdate(false);
+      }
+    },
+    [logLocal, t, toast],
+  );
+
+  useEffect(() => {
+    if (didAutoCheckUpdate.current) return;
+    didAutoCheckUpdate.current = true;
+    void checkForUpdate(false);
+  }, [checkForUpdate]);
+
+  async function handleInstallUpdate(): Promise<void> {
+    setInstallingUpdate(true);
+    try {
+      await api.installUpdate();
+      toast.push({ kind: "info", message: t("update.restarting"), timeout: 0 });
+    } catch (err) {
+      const msg = (err as Error).message;
+      logLocal("update.install", "error", msg);
+      toast.push({ kind: "error", message: t("update.toastInstallFailed", { message: msg }) });
+      setInstallingUpdate(false);
+    }
+  }
+
   async function refreshSyncStatuses(list: SkillInfo[]): Promise<SyncStatusMap> {
     if (list.length === 0) return {};
     try {
@@ -209,11 +280,15 @@ function AppInner() {
       const map: SyncStatusMap = {};
       await Promise.all(
         list.map(async (skill) => {
-          const [claude, codex] = await Promise.all([
-            api.checkSyncStatus(skill, "claude"),
-            api.checkSyncStatus(skill, "codex"),
-          ]);
-          map[skill.path] = { claude, codex };
+          const statuses = await Promise.all(
+            SUPPORTED_TOOLS.map(async (tool) => {
+              const status = await api.checkSyncStatus(skill, tool);
+              return [tool, status] as const;
+            }),
+          );
+          map[skill.path] = Object.fromEntries(statuses) as Partial<
+            Record<ToolName, SyncStatus>
+          >;
         }),
       );
       return map;
@@ -504,7 +579,7 @@ function AppInner() {
 
   const selectedSkill = skills.find((s) => s.path === selectedSkillPath) ?? null;
   const selectedSyncStatus = selectedSkill ? syncStatus[selectedSkill.path] : undefined;
-  const hasAnyInspectorEntries = inspector.claude.length + inspector.codex.length > 0;
+  const hasAnyInspectorEntries = SUPPORTED_TOOLS.some((tool) => inspector[tool].length > 0);
 
   const split = useVerticalSplit("ssm.split.tableHeight.v1", {
     defaultTop: 280,
@@ -514,7 +589,7 @@ function AppInner() {
 
   const onUnlinkFromTable = useCallback(
     (skill: SkillInfo, tool: ToolName) => {
-      if (tool !== "claude" && tool !== "codex") return;
+      if (!isSupportedTool(tool)) return;
       void actions.unlinkOne(skill, tool);
     },
     [actions],
@@ -522,14 +597,14 @@ function AppInner() {
 
   const onBulkSyncFromBar = useCallback(
     (tool: ToolName) => {
-      if (tool !== "claude" && tool !== "codex") return;
+      if (!isSupportedTool(tool)) return;
       void actions.bulkSync(tool);
     },
     [actions],
   );
   const onBulkUnlinkFromBar = useCallback(
     (tool: ToolName) => {
-      if (tool !== "claude" && tool !== "codex") return;
+      if (!isSupportedTool(tool)) return;
       void actions.bulkUnlink(tool);
     },
     [actions],
@@ -545,8 +620,9 @@ function AppInner() {
         onImport={handleImport}
         onOpenRoot={handleOpenRoot}
         onRefreshSync={handleRefreshSync}
-        onRescanClaude={() => handleRescanCliFromHeader("claude")}
-        onRescanCodex={() => handleRescanCliFromHeader("codex")}
+        onRescanTool={handleRescanCliFromHeader}
+        onCheckUpdate={() => checkForUpdate(true)}
+        checkingUpdate={checkingUpdate}
         busy={busy}
       />
 
@@ -558,6 +634,13 @@ function AppInner() {
         </div>
 
         <div className="content">
+          <UpdateNotice
+            info={updateInfo}
+            installing={installingUpdate}
+            onInstall={handleInstallUpdate}
+            onDismiss={() => setUpdateInfo(null)}
+          />
+
           {skills.length > 0 ? (
             <GlobalSyncBar
               skills={skills}
@@ -611,51 +694,35 @@ function AppInner() {
 
           {hasAnyInspectorEntries ? (
             <div className="inspector-row-wrap">
-              {inspector.claude.length > 0 && (
-                <ToolInspectorPanel
-                  tool="claude"
-                  entries={inspector.claude}
-                  scanning={inspectorBusy.claude}
-                  ignored={ignoredPaths.ignored}
-                  onUnlink={handleInspectorUnlink}
-                  onImport={handleInspectorImport}
-                  onOpen={handleInspectorOpen}
-                  onIgnore={(e) => {
-                    ignoredPaths.ignore(e.path);
-                    logLocal("inspector.ignore", "info", `Ignored ${e.path}`);
-                  }}
-                  onUnignore={(path) => {
-                    ignoredPaths.unignore(path);
-                    logLocal("inspector.unignore", "info", `Restored ${path}`);
-                  }}
-                  onClose={() => {
-                    setInspector((prev) => ({ ...prev, claude: [] }));
-                    logLocal("inspector.close", "info", "Closed the Claude CLI inspector panel.");
-                  }}
-                />
-              )}
-              {inspector.codex.length > 0 && (
-                <ToolInspectorPanel
-                  tool="codex"
-                  entries={inspector.codex}
-                  scanning={inspectorBusy.codex}
-                  ignored={ignoredPaths.ignored}
-                  onUnlink={handleInspectorUnlink}
-                  onImport={handleInspectorImport}
-                  onOpen={handleInspectorOpen}
-                  onIgnore={(e) => {
-                    ignoredPaths.ignore(e.path);
-                    logLocal("inspector.ignore", "info", `Ignored ${e.path}`);
-                  }}
-                  onUnignore={(path) => {
-                    ignoredPaths.unignore(path);
-                    logLocal("inspector.unignore", "info", `Restored ${path}`);
-                  }}
-                  onClose={() => {
-                    setInspector((prev) => ({ ...prev, codex: [] }));
-                    logLocal("inspector.close", "info", "Closed the Codex CLI inspector panel.");
-                  }}
-                />
+              {SUPPORTED_TOOLS.map((tool) =>
+                inspector[tool].length > 0 ? (
+                  <ToolInspectorPanel
+                    key={tool}
+                    tool={tool}
+                    entries={inspector[tool]}
+                    scanning={inspectorBusy[tool]}
+                    ignored={ignoredPaths.ignored}
+                    onUnlink={handleInspectorUnlink}
+                    onImport={handleInspectorImport}
+                    onOpen={handleInspectorOpen}
+                    onIgnore={(e) => {
+                      ignoredPaths.ignore(e.path);
+                      logLocal("inspector.ignore", "info", `Ignored ${e.path}`);
+                    }}
+                    onUnignore={(path) => {
+                      ignoredPaths.unignore(path);
+                      logLocal("inspector.unignore", "info", `Restored ${path}`);
+                    }}
+                    onClose={() => {
+                      setInspector((prev) => ({ ...prev, [tool]: [] }));
+                      logLocal(
+                        "inspector.close",
+                        "info",
+                        `Closed the ${TOOL_LABEL[tool]} CLI inspector panel.`,
+                      );
+                    }}
+                  />
+                ) : null,
               )}
             </div>
           ) : null}

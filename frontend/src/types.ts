@@ -51,6 +51,33 @@ export interface AppSettings {
   sharedRoot: string | null;
 }
 
+export interface UpdateInfo {
+  currentVersion: string;
+  latestVersion: string;
+  updateAvailable: boolean;
+  releaseUrl: string;
+  releaseNotes: string;
+  publishedAt: string;
+  assetName: string;
+  assetUrl: string;
+  assetSize: number;
+  assetKind: string;
+  installSupported: boolean;
+  canInstall: boolean;
+  message: string;
+}
+
+export interface UpdateInstallResult {
+  started: boolean;
+  message: string;
+  version: string;
+  assetName: string;
+  downloadPath: string;
+  stagedPath: string;
+  logPath: string;
+  sha256: string;
+}
+
 export interface LogEntry {
   timestamp: string;
   action: string;
@@ -90,8 +117,8 @@ export interface SkillMetadataPatch {
   origin?: SkillOrigin;
 }
 
-export const SUPPORTED_TOOLS = ["claude", "codex"] as const;
-export const UNSUPPORTED_TOOLS = ["gemini", "opencode", "hermes"] as const;
+export const SUPPORTED_TOOLS = ["claude", "codex", "gemini", "opencode"] as const;
+export const UNSUPPORTED_TOOLS = ["hermes"] as const;
 export const ALL_TOOLS = [...SUPPORTED_TOOLS, ...UNSUPPORTED_TOOLS] as const;
 
 export type SupportedTool = (typeof SUPPORTED_TOOLS)[number];

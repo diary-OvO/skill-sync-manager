@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
-import type { SkillInfo, SkillOrigin, SyncStatus, ToolName } from "../types";
+import { SUPPORTED_TOOLS, type SkillInfo, type SkillOrigin, type SyncStatus, type ToolName } from "../types";
 import { useLanguage } from "../i18n";
+import { TOOL_LABEL } from "../assets/toolLogos";
 
 interface Props {
   skill: SkillInfo | null;
@@ -29,7 +30,7 @@ function Field({
   );
 }
 
-// 等宽、可断行的路径单元，供 skillPath / claudeTarget / codexTarget 复用。
+// 等宽、可断行的路径单元，供 skillPath / tool target 复用。
 const monoPathStyle: React.CSSProperties = {
   fontFamily: "var(--mono)",
   fontSize: 12,
@@ -43,8 +44,6 @@ export function SkillDetail({ skill, syncStatus, onChangeMetadata }: Props) {
     return <div className="empty">{t("detail.empty")}</div>;
   }
 
-  const claudeTarget = syncStatus?.claude?.targetPath ?? "—";
-  const codexTarget = syncStatus?.codex?.targetPath ?? "—";
   const fmEntries = Object.entries(skill.frontmatter ?? {});
   const origin: SkillOrigin = (skill.origin as SkillOrigin) || "owned";
 
@@ -105,12 +104,11 @@ export function SkillDetail({ skill, syncStatus, onChangeMetadata }: Props) {
         <div style={monoPathStyle}>{skill.path}</div>
       </Field>
 
-      <Field label={t("detail.claudeTarget")}>
-        <div style={monoPathStyle}>{claudeTarget}</div>
-      </Field>
-      <Field label={t("detail.codexTarget")}>
-        <div style={monoPathStyle}>{codexTarget}</div>
-      </Field>
+      {SUPPORTED_TOOLS.map((tool) => (
+        <Field key={tool} label={t("detail.toolTarget", { tool: TOOL_LABEL[tool] })}>
+          <div style={monoPathStyle}>{syncStatus?.[tool]?.targetPath ?? "—"}</div>
+        </Field>
+      ))}
 
       {skill.frozen && (
         <div className="full">

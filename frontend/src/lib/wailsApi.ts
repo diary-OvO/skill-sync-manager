@@ -1,10 +1,12 @@
 import {
   CheckSyncStatus,
+  CheckForUpdate,
   DetectCliTools,
   GetGitStatus,
   GetRegistry,
   ImportSkillFolder,
   ImportSkillFromCli,
+  InstallUpdate,
   LoadSettings,
   LogHistory,
   MigrateCliSkillToShared,
@@ -36,6 +38,8 @@ import type {
   SyncStatus,
   ToolName,
   ToolStatus,
+  UpdateInfo,
+  UpdateInstallResult,
 } from "../types";
 
 // Wails 代码生成侧的返回类型带有它自己的类命名空间（main.xxx），
@@ -46,6 +50,8 @@ const bridge = <T,>(p: unknown): Promise<T> => p as Promise<T>;
 
 export const wailsApi = {
   loadSettings: (): Promise<AppSettings> => bridge(LoadSettings()),
+  checkForUpdate: (): Promise<UpdateInfo> => bridge(CheckForUpdate()),
+  installUpdate: (): Promise<UpdateInstallResult> => bridge(InstallUpdate()),
   saveSettings: (settings: AppSettings): Promise<void> =>
     bridge(SaveSettings(settings as never)),
   selectRootFolder: (): Promise<string> => bridge(SelectRootFolder()),

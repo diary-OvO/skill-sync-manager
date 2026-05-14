@@ -18,6 +18,7 @@ import (
 	"skill-sync-manager/internal/skillscanner"
 	"skill-sync-manager/internal/symlinkwindows"
 	"skill-sync-manager/internal/synctargets"
+	"skill-sync-manager/internal/updater"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -162,6 +163,63 @@ func (a *App) SaveSettings(s models.AppSettings) error {
 	}
 	a.logInfo("settings:save", "Saved settings. sharedRoot="+root)
 	return nil
+}
+
+// ---------- 更新 ----------
+
+func (a *App) CheckForUpdate() (models.UpdateInfo, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	info, err := updater.CheckLatest(ctx, updater.DefaultConfig())
+	if err != nil {
+		a.logError("update:check", err.Error())
+		return info, err
+	}
+	if info.UpdateAvailable {
+		a.logInfo(
+			"update:check",
+			fmt.Sprintf("Update available: %s -> %s (%s)", info.CurrentVersion, info.LatestVersion, info.AssetName),
+		)
+	} else {
+		a.logInfo("update:check", fmt.Sprintf("No update available. Current version: %s", info.CurrentVersion))
+	}
+	return info, nil
+}
+
+func (a *App) InstallUpdate() (models.UpdateInstallResult, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	info, err := updater.CheckLatest(ctx, updater.DefaultConfig())
+	if err != nil {
+		a.logError("update:install", err.Error())
+		return models.UpdateInstallResult{}, err
+	}
+	if !info.UpdateAvailable {
+		err := fmt.Errorf("no update is available")
+		a.logInfo("update:install", err.Error())
+		return models.UpdateInstallResult{}, err
+	}
+
+	result, err := updater.DownloadAndStartInstall(ctx, info, updater.DefaultConfig())
+	if err != nil {
+		a.logError("update:install", err.Error())
+		return models.UpdateInstallResult{}, err
+	}
+	a.logInfo(
+		"update:install",
+		fmt.Sprintf("Downloaded %s from %s. Restarting to apply update.", result.Version, result.AssetName),
+	)
+
+	if a.ctx != nil {
+		go func(ctx context.Context) {
+			time.Sleep(800 * time.Millisecond)
+			a.runShutdown("update-install")
+			wailsRuntime.Quit(ctx)
+		}(a.ctx)
+	}
+	return result, nil
 }
 
 // ---------- 对话框 / Shell ----------
