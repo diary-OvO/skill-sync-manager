@@ -1,0 +1,19 @@
+//go:build windows
+
+package symlinkwindows
+
+import "syscall"
+
+const fileAttributeReparsePoint = 0x400
+
+func hasReparsePoint(path string) bool {
+	ptr, err := syscall.UTF16PtrFromString(path)
+	if err != nil {
+		return false
+	}
+	attrs, err := syscall.GetFileAttributes(ptr)
+	if err != nil {
+		return false
+	}
+	return attrs&fileAttributeReparsePoint != 0
+}

@@ -27,11 +27,9 @@ func PathExists(p string) bool {
 }
 
 // IsLinkPath 判断 p 是否为符号链接或目录 junction。
-// Go 在不同版本下对 NTFS 目录 junction 的处理略有差异，这里依次尝试三种信号，
-// 只要其中任意一种命中即视为链接：
-//  1. Lstat 返回的 mode 位（ModeSymlink / 反解点位）；
-//  2. os.Readlink 能成功：普通目录会返回错误；
-//  3. EvalSymlinks 解析出的路径与输入不同。
+// Windows 下不能用 EvalSymlinks(abs) != abs 做兜底：CI 路径中的 8.3
+// 短路径与长路径规范化差异会让普通目录也看起来"解析后不同"。
+// 因此这里只信任明确的 symlink mode、Readlink 成功或 reparse point 属性。
 func IsLinkPath(p string) bool {
 	st, err := os.Lstat(p)
 	if err != nil {
@@ -40,21 +38,15 @@ func IsLinkPath(p string) bool {
 	if st.Mode()&os.ModeSymlink != 0 {
 		return true
 	}
+	if hasReparsePoint(p) {
+		return true
+	}
 	// 在部分 Go / Windows 组合下，junction 在 Lstat 里表现为普通目录，
 	// 但 Readlink 仍能读到 NTFS 反解点并返回目标；普通目录会返回错误。
 	if _, err := os.Readlink(p); err == nil {
 		return true
 	}
-	// 兜底探测：解析出的路径若与输入不同，即可视为链接。
-	abs, err := filepath.Abs(p)
-	if err != nil {
-		return false
-	}
-	resolved, err := filepath.EvalSymlinks(abs)
-	if err != nil {
-		return false
-	}
-	return !strings.EqualFold(filepath.Clean(resolved), filepath.Clean(abs))
+	return false
 }
 
 // ResolveRealPath 返回 junction / 符号链接所指向的真实绝对路径；
