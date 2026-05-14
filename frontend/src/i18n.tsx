@@ -41,6 +41,18 @@ const messages: Record<Lang, MessageTree> = {
       toastCheckFailed: "Update check failed:\n{message}",
       toastInstallFailed: "Update install failed:\n{message}",
     },
+    about: {
+      open: "About",
+      title: "About Skill Sync Manager",
+      loading: "Loading app information…",
+      version: "Version {version}",
+      appName: "App",
+      repository: "Repository",
+      release: "Release",
+      executable: "Executable",
+      close: "Close",
+      loadFailed: "Failed to load app information:\n{message}",
+    },
     scan: {
       overlay: {
         title: "Scanning…",
@@ -251,6 +263,18 @@ const messages: Record<Lang, MessageTree> = {
       toastLatest: "当前已是最新版（{version}）。",
       toastCheckFailed: "检查更新失败：\n{message}",
       toastInstallFailed: "安装更新失败：\n{message}",
+    },
+    about: {
+      open: "关于",
+      title: "关于 Skill Sync Manager",
+      loading: "正在读取应用信息…",
+      version: "版本 {version}",
+      appName: "应用",
+      repository: "仓库",
+      release: "Release",
+      executable: "当前 EXE",
+      close: "关闭",
+      loadFailed: "读取应用信息失败：\n{message}",
     },
     scan: {
       overlay: {

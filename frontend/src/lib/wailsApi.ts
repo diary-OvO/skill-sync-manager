@@ -2,6 +2,7 @@ import {
   CheckSyncStatus,
   CheckForUpdate,
   DetectCliTools,
+  GetAppInfo,
   GetGitStatus,
   GetRegistry,
   ImportSkillFolder,
@@ -26,6 +27,7 @@ import { EventsOff, EventsOn, Quit as RuntimeQuit } from "../../wailsjs/runtime/
 
 import type {
   AppSettings,
+  AppInfo,
   CliSkillEntry,
   GitStatus,
   LogEntry,
@@ -50,6 +52,7 @@ const bridge = <T,>(p: unknown): Promise<T> => p as Promise<T>;
 
 export const wailsApi = {
   loadSettings: (): Promise<AppSettings> => bridge(LoadSettings()),
+  getAppInfo: (): Promise<AppInfo> => bridge(GetAppInfo()),
   checkForUpdate: (): Promise<UpdateInfo> => bridge(CheckForUpdate()),
   installUpdate: (): Promise<UpdateInstallResult> => bridge(InstallUpdate()),
   saveSettings: (settings: AppSettings): Promise<void> =>

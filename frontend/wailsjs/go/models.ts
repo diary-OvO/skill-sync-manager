@@ -21,6 +21,30 @@ export namespace main {
 
 export namespace models {
 	
+	export class AppInfo {
+	    appName: string;
+	    version: string;
+	    repoOwner: string;
+	    repoName: string;
+	    repoUrl: string;
+	    releaseUrl: string;
+	    executablePath: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AppInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.appName = source["appName"];
+	        this.version = source["version"];
+	        this.repoOwner = source["repoOwner"];
+	        this.repoName = source["repoName"];
+	        this.repoUrl = source["repoUrl"];
+	        this.releaseUrl = source["releaseUrl"];
+	        this.executablePath = source["executablePath"];
+	    }
+	}
 	export class AppSettings {
 	    sharedRoot?: string;
 	

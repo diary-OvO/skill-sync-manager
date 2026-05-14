@@ -10,6 +10,8 @@ export function CheckSyncStatus(arg1:models.SkillInfo,arg2:string):Promise<model
 
 export function DetectCliTools():Promise<Array<models.ToolStatus>>;
 
+export function GetAppInfo():Promise<models.AppInfo>;
+
 export function GetGitStatus(arg1:string):Promise<models.GitStatus>;
 
 export function GetRegistry(arg1:string):Promise<registry.Registry>;

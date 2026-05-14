@@ -51,6 +51,16 @@ export interface AppSettings {
   sharedRoot: string | null;
 }
 
+export interface AppInfo {
+  appName: string;
+  version: string;
+  repoOwner: string;
+  repoName: string;
+  repoUrl: string;
+  releaseUrl: string;
+  executablePath: string;
+}
+
 export interface UpdateInfo {
   currentVersion: string;
   latestVersion: string;

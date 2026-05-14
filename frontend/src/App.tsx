@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { wailsApi as api } from "./lib/wailsApi";
 import type {
+  AppInfo,
   CliSkillEntry,
   GitStatus,
   LogEntry,
@@ -24,6 +25,7 @@ import { ToolInspectorPanel } from "./components/ToolInspectorPanel";
 import { ToastProvider, useToast } from "./components/Toast";
 import { ScanProgressOverlay } from "./components/ScanProgressOverlay";
 import { UpdateNotice } from "./components/UpdateNotice";
+import { AboutDialog } from "./components/AboutDialog";
 import { useVerticalSplit } from "./hooks/useDragResize";
 import { useShutdownCleanup } from "./hooks/useShutdownCleanup";
 import { useSyncActions, type SyncStatusMap } from "./hooks/useSyncActions";
@@ -86,6 +88,9 @@ function AppInner() {
   const [platformWarning, setPlatformWarning] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const [loadingAppInfo, setLoadingAppInfo] = useState(false);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [installingUpdate, setInstallingUpdate] = useState(false);
   const [inspector, setInspector] = useState<InspectorState>(() => createInspectorState());
@@ -275,15 +280,40 @@ function AppInner() {
     }
   }
 
-  async function handleOpenRelease(): Promise<void> {
-    if (!updateInfo?.releaseUrl) return;
+  async function openExternalPath(path: string): Promise<void> {
+    if (!path) return;
     try {
-      await api.openPath(updateInfo.releaseUrl);
+      await api.openPath(path);
     } catch (err) {
       toast.push({
         kind: "error",
         message: t("action.openFail", { message: (err as Error).message }),
       });
+    }
+  }
+
+  async function handleOpenUpdateRelease(): Promise<void> {
+    await openExternalPath(updateInfo?.releaseUrl ?? "");
+  }
+
+  async function handleOpenAboutRelease(): Promise<void> {
+    await openExternalPath(appInfo?.releaseUrl ?? "");
+  }
+
+  async function handleOpenAbout(): Promise<void> {
+    setAboutOpen(true);
+    if (appInfo) return;
+    setLoadingAppInfo(true);
+    try {
+      const info = await api.getAppInfo();
+      setAppInfo(info);
+    } catch (err) {
+      toast.push({
+        kind: "error",
+        message: t("about.loadFailed", { message: (err as Error).message }),
+      });
+    } finally {
+      setLoadingAppInfo(false);
     }
   }
 
@@ -643,6 +673,7 @@ function AppInner() {
         onRefreshSync={handleRefreshSync}
         onRescanTool={handleRescanCliFromHeader}
         onCheckUpdate={() => checkForUpdate(true)}
+        onAbout={handleOpenAbout}
         checkingUpdate={checkingUpdate}
         updateBusy={checkingUpdate || installingUpdate}
         busy={busy}
@@ -660,8 +691,16 @@ function AppInner() {
             info={updateInfo}
             installing={installingUpdate}
             onInstall={handleInstallUpdate}
-            onOpenRelease={handleOpenRelease}
+            onOpenRelease={handleOpenUpdateRelease}
             onDismiss={() => setUpdateInfo(null)}
+          />
+          <AboutDialog
+            open={aboutOpen}
+            info={appInfo}
+            loading={loadingAppInfo}
+            onClose={() => setAboutOpen(false)}
+            onOpenRelease={handleOpenAboutRelease}
+            onCheckUpdate={() => checkForUpdate(true)}
           />
 
           {skills.length > 0 ? (

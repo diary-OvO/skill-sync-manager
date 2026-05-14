@@ -14,6 +14,10 @@ export function DetectCliTools() {
   return window['go']['main']['App']['DetectCliTools']();
 }
 
+export function GetAppInfo() {
+  return window['go']['main']['App']['GetAppInfo']();
+}
+
 export function GetGitStatus(arg1) {
   return window['go']['main']['App']['GetGitStatus'](arg1);
 }

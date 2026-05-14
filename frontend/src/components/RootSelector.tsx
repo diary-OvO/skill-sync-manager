@@ -12,6 +12,7 @@ interface Props {
   onRefreshSync: () => void;
   onRescanTool: (tool: SupportedTool) => void;
   onCheckUpdate: () => void;
+  onAbout: () => void;
   checkingUpdate: boolean;
   updateBusy: boolean;
   busy: boolean;
@@ -28,6 +29,7 @@ export function RootSelector(props: Props) {
     onRefreshSync,
     onRescanTool,
     onCheckUpdate,
+    onAbout,
     checkingUpdate,
     updateBusy,
     busy,
@@ -68,6 +70,9 @@ export function RootSelector(props: Props) {
       </button>
       <button onClick={onCheckUpdate} disabled={busy || updateBusy} className="ghost">
         {checkingUpdate ? t("update.checking") : t("update.check")}
+      </button>
+      <button onClick={onAbout} disabled={busy} className="ghost">
+        {t("about.open")}
       </button>
 
       <div className="lang-switch">

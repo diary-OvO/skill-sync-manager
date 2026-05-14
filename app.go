@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -19,6 +20,7 @@ import (
 	"skill-sync-manager/internal/symlinkwindows"
 	"skill-sync-manager/internal/synctargets"
 	"skill-sync-manager/internal/updater"
+	"skill-sync-manager/internal/version"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -163,6 +165,29 @@ func (a *App) SaveSettings(s models.AppSettings) error {
 	}
 	a.logInfo("settings:save", "Saved settings. sharedRoot="+root)
 	return nil
+}
+
+// ---------- 应用信息 ----------
+
+func (a *App) GetAppInfo() (models.AppInfo, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		exe = ""
+	}
+	repoURL := fmt.Sprintf("https://github.com/%s/%s", version.RepoOwner, version.RepoName)
+	releaseURL := repoURL + "/releases"
+	if version.Version != "" && version.Version != "dev" {
+		releaseURL = repoURL + "/releases/tag/" + version.Version
+	}
+	return models.AppInfo{
+		AppName:        version.AppName,
+		Version:        version.Version,
+		RepoOwner:      version.RepoOwner,
+		RepoName:       version.RepoName,
+		RepoURL:        repoURL,
+		ReleaseURL:     releaseURL,
+		ExecutablePath: exe,
+	}, nil
 }
 
 // ---------- 更新 ----------

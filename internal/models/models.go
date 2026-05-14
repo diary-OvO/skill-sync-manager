@@ -68,6 +68,16 @@ type AppSettings struct {
 	SharedRoot *string `json:"sharedRoot"`
 }
 
+type AppInfo struct {
+	AppName        string `json:"appName"`
+	Version        string `json:"version"`
+	RepoOwner      string `json:"repoOwner"`
+	RepoName       string `json:"repoName"`
+	RepoURL        string `json:"repoUrl"`
+	ReleaseURL     string `json:"releaseUrl"`
+	ExecutablePath string `json:"executablePath"`
+}
+
 type UpdateInfo struct {
 	CurrentVersion   string `json:"currentVersion"`
 	LatestVersion    string `json:"latestVersion"`
