@@ -1,225 +1,86 @@
 # Skill Sync Manager
 
-> 🌐 **Language**: [简体中文](./README.md) · **English**
+> Language: [简体中文](./README.md) · **English**
 
-A Windows-first local desktop tool for managing Agent Skills and syncing a single shared skill repository to multiple CLI agent tools. Built with **Wails v2 + Go + React + TypeScript + Vite**.
+A Windows-first sync manager for Agent Skills.
+Sync one shared skill repository to Claude Code, OpenAI Codex, and other CLI agent tools so each skill is maintained once and reused everywhere.
 
-## Why a shared skill root
+## Inspiration
 
-A "skill" is a folder containing a `SKILL.md` (with YAML frontmatter describing `name` and `description`) plus optional `scripts/`, `references/`, `assets/`, and `agents/` subfolders.
+This project is inspired by [CC Switch](https://ccswitch.ai/). CC Switch is closer to a full AI CLI operations console, covering provider switching, MCP / Prompts / Skills, agent takeover, session search, usage analytics, and cloud sync. Its public docs also emphasize one-click Skills installation from GitHub repositories or ZIP files and syncing them across apps.
 
-Claude Code and OpenAI Codex each expect skills in their own directory. Copying skills between directories means every edit has to be duplicated. Skill Sync Manager keeps every skill in one place (for example `D:\AgentSkills`) and the app creates **Windows directory junctions**:
+The practical pain point I hit while using CC Switch was narrower: I wanted to manage a set of skills I write and maintain myself, and I wanted to choose my own local management directory as the single source of truth instead of copying skills into a tool-owned or app-owned directory.
 
-- `%USERPROFILE%\.claude\skills\<skill-name>` → `D:\AgentSkills\<skill-name>`
-- `%USERPROFILE%\.codex\skills\<skill-name>` → `D:\AgentSkills\<skill-name>`
+Skill Sync Manager is therefore intentionally narrower: it does not switch providers, take over agents, or manage sessions. It solves one problem: safely syncing Agent Skills from a custom local directory into multiple CLI tool directories without repeated copies, duplicated maintenance, or accidental overwrites.
 
-Edit once. Both tools see the update. The shared root is the single source of truth.
+## ✨ Key Features
 
-## Why Wails + Go + React + TypeScript
+- **Unified management:** Keep all Agent Skills in one shared root instead of maintaining duplicated folders across tools.
+- **One-click sync:** Sync skills to Claude Code and OpenAI Codex through Windows directory junctions.
+- **Visible status:** See scan results, sync state, conflicts, CLI detection, Git status, and backend command logs.
 
-The previous version ran on Electron Forge. We migrated to **Wails v2** for a few reasons:
+## Setup and Usage
 
-- **Smaller footprint**: Wails apps ship as a single Go binary + the system WebView2 runtime, not a bundled Chromium.
-- **Go for local system work**: Directory junctions, file scanning, Git subprocess calls, and settings storage live naturally in Go's standard library. No `child_process` gymnastics across a Node main + preload boundary.
-- **Single typed bridge**: Every public method on the Go `App` is bound into the frontend by Wails as an async TypeScript function. No manual IPC channels.
-- **Long-term maintenance**: fewer moving parts (no Electron Forge, no preload bridge, no renderer-only type duplication).
+Requirements:
 
-The React + TypeScript + Vite frontend layer is unchanged in spirit — same component tree, same simple CSS. Only the API call layer was replaced.
+- Windows 10/11
+- Go 1.23+
+- Node.js 20+
+- Wails CLI v2.12+
+- WebView2 Runtime
 
-## Supported sync targets
+1. Install the Wails CLI.
 
-| Tool | Status | Target directory |
-| --- | --- | --- |
-| Claude Code | Supported | `%USERPROFILE%\.claude\skills` |
-| OpenAI Codex | Supported | `%USERPROFILE%\.codex\skills` |
-| Gemini CLI | UI placeholder | not yet supported |
-| OpenCode | UI placeholder | not yet supported |
-| Hermes | UI placeholder | not yet supported |
+   ```shell
+   go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+   ```
 
-Clicking a sync button for an unsupported tool shows `"Sync to <tool> is not yet supported."`
+2. Clone the repository and install dependencies.
 
-## Requirements (Windows)
+   ```shell
+   git clone https://github.com/dirary0/skill-sync-manager.git
+   cd skill-sync-manager
+   cd frontend && npm install && cd ..
+   ```
 
-- **Go** 1.23+
-- **Node.js** 20+ (tested with 22, 24)
-- **Wails CLI** v2.12+
-- **WebView2 Runtime** (pre-installed on Windows 10 21H2 and Windows 11; otherwise install from Microsoft)
+3. Start the development app.
 
-### Recommended: mise
+   ```shell
+   wails dev
+   ```
 
-Use [`mise`](https://mise.jdx.dev/) to manage Go and Node versions:
+4. Build the Windows executable.
 
-```bash
-mise install
+   ```shell
+   wails build
+   ```
+
+Build output:
+
+```text
+build/bin/skill-sync-manager.exe
 ```
 
-### Install the Wails CLI
+## Basic Flow
 
-```bash
-go install github.com/wailsapp/wails/v2/cmd/wails@latest
-```
+1. Choose a shared skill root, for example `D:\AgentSkills`.
+2. Click `Scan` to find skill folders containing `SKILL.md`.
+3. Select a skill and sync it to Claude Code or OpenAI Codex.
+4. Check the log panel for backend command status and sync results.
 
-Check the dev toolchain:
+## Tech Stack
 
-```bash
-wails doctor
-```
+- Wails v2
+- Go
+- React
+- TypeScript
+- Vite
+- Windows directory junction
 
-## Install
+## Current Status
 
-```bash
-# Go dependencies (auto-resolved on first build, but explicit is fine)
-go mod tidy
-
-# Frontend dependencies
-cd frontend && npm install && cd ..
-```
-
-## Run (development)
-
-```bash
-wails dev
-```
-
-This starts Vite for HMR, launches the WebView2 window, and rebuilds the Go backend on each save.
-
-## Build (production)
-
-```bash
-wails build
-```
-
-Produces a standalone `build/bin/skill-sync-manager.exe`.
-
-## Tests
-
-```bash
-# Go backend
-go test ./...
-
-# Frontend (vitest is configured but no frontend tests exist yet)
-cd frontend && npm test
-```
-
-## Windows junction permissions
-
-The app creates directory junctions via `cmd /C mklink /J`. Junctions don't require admin rights on most modern Windows systems, but creation can still fail depending on group policy or drive type. If you see a permission error:
-
-- Enable **Developer Mode** in Windows Settings → For developers.
-- Or run Skill Sync Manager **as administrator**.
-- Or verify the target path exists on an NTFS volume.
-
-Skill Sync Manager **never deletes or overwrites** an existing path. If the target already exists and isn't a junction pointing at the shared skill, it's reported as a conflict and left untouched.
-
-## Usage flow
-
-1. Launch the app (`wails dev` or the built `.exe`).
-2. **Shared Skill Root**: click `Browse` and pick the folder where you keep your shared skills (for example `D:\AgentSkills`).
-3. Click `Scan`. The app lists every subdirectory that contains a `SKILL.md`.
-4. Review the **Git Status** and **CLI Tools** panels. The app detects `claude`, `codex`, `gemini`, `opencode`, and `hermes` via `where`.
-5. Select a skill and use **Sync Selected to Claude** / **Sync Selected to Codex** (or **Sync All**).
-6. The Claude/Codex columns update to `synced`, `missing`, `conflict`, or `error`.
-7. Use **Import Skill Folder** to copy an external skill folder into the shared root. Existing targets are never overwritten, and the external folder's `.git` is not copied.
-
-## Sync states
-
-| State | Meaning |
-| --- | --- |
-| `synced` | Target is a junction pointing to the shared skill folder. |
-| `missing` | No target exists yet. Safe to sync. |
-| `conflict` | Something exists at the target but isn't our junction, or points elsewhere. Not overwritten. |
-| `invalid` | The skill's `SKILL.md` is missing `name` or `description`. |
-| `unsupported` | Tool not yet supported. |
-| `error` | Creation failed, usually a permissions issue on Windows. |
-
-## Current limitations
-
-- **Windows only for sync**. Non-Windows platforms open the UI, scan skills, read Git status, and detect CLIs, but sync actions return an error.
-- Only **Claude Code** and **OpenAI Codex** are real sync targets.
-- **Read-only Git**. No automatic `git init` / `add` / `commit` / `push` / `pull`. Git status is shown for context only.
-- **Conflicts are never overwritten**. Resolve them manually.
-
-## Roadmap
-
-- Gemini CLI, OpenCode, Hermes sync targets.
-- Git commit / push helpers for the shared skill repo.
-- Skill diff viewer.
-- Conflict migration wizard (copy an existing real directory back into the shared root and replace it with a junction after confirmation).
-
-## Project structure
-
-```
-skill-sync-manager/
-├── README.md
-├── go.mod
-├── go.sum
-├── main.go               # Wails app entrypoint
-├── app.go                # App struct + public methods bound to the frontend
-├── wails.json            # Wails project config
-├── mise.toml
-├── internal/
-│   ├── models/           # Shared Go types (SkillInfo, SyncStatus, …)
-│   ├── skillscanner/     # Scan + parse + import SKILL.md
-│   ├── synctargets/      # Claude/Codex target paths + sync logic
-│   ├── symlinkwindows/   # mklink /J + junction detection
-│   ├── gitstatus/        # git subprocess calls
-│   ├── clidetector/      # where/which CLI detection
-│   └── settings/         # %APPDATA%\skill-sync-manager\settings.json
-└── frontend/
-    ├── index.html
-    ├── package.json
-    ├── tsconfig.json
-    ├── vite.config.ts
-    ├── src/
-    │   ├── main.tsx
-    │   ├── App.tsx
-    │   ├── types.ts
-    │   ├── styles.css
-    │   ├── lib/
-    │   │   └── wailsApi.ts          # Wraps wailsjs/go/main/App
-    │   └── components/              # RootSelector, GitStatusPanel, ToolStatusPanel,
-    │                                # SkillTable, SkillDetail, ActionPanel, LogPanel
-    └── wailsjs/                     # Generated by Wails (stubbed in-repo for tsc/vite)
-```
-
-## Acceptance check
-
-```bash
-go version
-node -v
-wails doctor
-go test ./...
-cd frontend && npm install && npm test
-cd .. && wails dev
-```
-
-### Manual Windows smoke test
-
-```powershell
-mkdir D:\AgentSkills
-mkdir D:\AgentSkills\test-skill
-notepad D:\AgentSkills\test-skill\SKILL.md
-```
-
-Paste into `SKILL.md`:
-
-```markdown
----
-name: test-skill
-description: Test skill for Claude and Codex sync.
----
-
-# Test Skill
-
-Use this skill for testing sync behavior.
-```
-
-Then:
-
-1. `wails dev`
-2. In the UI, Browse to `D:\AgentSkills`.
-3. Click `Scan`. You should see `test-skill`.
-4. Click `Sync Selected to Claude`, then check `dir $env:USERPROFILE\.claude\skills`.
-5. Click `Sync Selected to Codex`, then check `dir $env:USERPROFILE\.codex\skills`.
-6. Click sync again — state stays `synced`, no duplicate junctions created.
-7. Pre-create a real directory at the target location to verify it reports `conflict` and does not overwrite.
+- Claude Code and OpenAI Codex are supported.
+- Gemini CLI, OpenCode, and Hermes are placeholder targets for now.
+- Sync is currently Windows-only.
+- Git is read-only and used for status display only.
+- Conflicting target folders are never overwritten and must be handled manually.
