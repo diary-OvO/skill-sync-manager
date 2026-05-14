@@ -996,6 +996,13 @@ input[type="text"]:focus {
   overflow-wrap: anywhere;
 }
 
+.update-notice-note {
+  max-width: 720px;
+  font-size: 12px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
 .update-notice-actions {
   flex: none;
   display: inline-flex;

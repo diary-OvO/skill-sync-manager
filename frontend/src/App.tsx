@@ -256,13 +256,34 @@ function AppInner() {
   async function handleInstallUpdate(): Promise<void> {
     setInstallingUpdate(true);
     try {
-      await api.installUpdate();
-      toast.push({ kind: "info", message: t("update.restarting"), timeout: 0 });
+      const result = await api.installUpdate();
+      if (!result.started) {
+        toast.push({ kind: "info", message: result.message || t("update.notStarted") });
+        setInstallingUpdate(false);
+        return;
+      }
+      toast.push({
+        kind: "info",
+        message: result.message || t("update.restarting"),
+        timeout: 0,
+      });
     } catch (err) {
       const msg = (err as Error).message;
       logLocal("update.install", "error", msg);
       toast.push({ kind: "error", message: t("update.toastInstallFailed", { message: msg }) });
       setInstallingUpdate(false);
+    }
+  }
+
+  async function handleOpenRelease(): Promise<void> {
+    if (!updateInfo?.releaseUrl) return;
+    try {
+      await api.openPath(updateInfo.releaseUrl);
+    } catch (err) {
+      toast.push({
+        kind: "error",
+        message: t("action.openFail", { message: (err as Error).message }),
+      });
     }
   }
 
@@ -623,6 +644,7 @@ function AppInner() {
         onRescanTool={handleRescanCliFromHeader}
         onCheckUpdate={() => checkForUpdate(true)}
         checkingUpdate={checkingUpdate}
+        updateBusy={checkingUpdate || installingUpdate}
         busy={busy}
       />
 
@@ -638,6 +660,7 @@ function AppInner() {
             info={updateInfo}
             installing={installingUpdate}
             onInstall={handleInstallUpdate}
+            onOpenRelease={handleOpenRelease}
             onDismiss={() => setUpdateInfo(null)}
           />
 

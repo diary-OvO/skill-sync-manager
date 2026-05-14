@@ -17,6 +17,7 @@ Skill Sync Manager is therefore intentionally narrower: it does not switch provi
 
 - **Unified management:** Keep all Agent Skills in one shared root instead of maintaining duplicated folders across tools.
 - **One-click sync:** Sync skills to Claude Code, OpenAI Codex, Gemini CLI, and OpenCode through Windows directory junctions.
+- **Auto update:** Check GitHub Releases on startup, or check manually and install a newer Windows exe.
 - **Visible status:** See scan results, sync state, conflicts, CLI detection, Git status, and backend command logs.
 
 ## Setup and Usage
@@ -61,6 +62,14 @@ Build output:
 build/bin/skill-sync-manager.exe
 ```
 
+The release workflow uploads the executable directly as a bare exe:
+
+```text
+skill-sync-manager-vX.Y.Z-windows-amd64.exe
+```
+
+Users can download and run it directly without extracting a ZIP.
+
 ## Basic Flow
 
 1. Choose a shared skill root, for example `~/.agents/skills` or `D:\AgentSkills`.
@@ -90,5 +99,6 @@ build/bin/skill-sync-manager.exe
 - Claude Code, OpenAI Codex, Gemini CLI, and OpenCode are supported.
 - Hermes is a placeholder target for now.
 - Sync is currently Windows-only.
+- Automatic update installation currently supports only Windows exe builds.
 - Git is read-only and used for status display only.
 - Conflicting target folders are never overwritten and must be handled manually.
