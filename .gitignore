@@ -1,5 +1,8 @@
-# Go build output
-/build/
+# Go / Wails build output
+/build/*
+!/build/windows/
+/build/windows/*
+!/build/windows/icon.ico
 *.exe
 *.tsbuildinfo
 
