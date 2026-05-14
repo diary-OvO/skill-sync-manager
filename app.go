@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"os/exec"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -13,6 +12,7 @@ import (
 	"skill-sync-manager/internal/clitoolscanner"
 	"skill-sync-manager/internal/gitstatus"
 	"skill-sync-manager/internal/models"
+	"skill-sync-manager/internal/proc"
 	"skill-sync-manager/internal/registry"
 	"skill-sync-manager/internal/settings"
 	"skill-sync-manager/internal/skillscanner"
@@ -46,6 +46,9 @@ func NewApp() *App {
 // startup 由 main.go 中的 options.App.OnStartup 挂载。
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	proc.SetObserver(func(result string, action string, message string) {
+		a.pushLog(result, action, message)
+	})
 	a.logInfo("app:ready", fmt.Sprintf("Skill Sync Manager starting on %s", runtime.GOOS))
 }
 
@@ -186,20 +189,14 @@ func (a *App) OpenPath(path string) error {
 	if path == "" {
 		return fmt.Errorf("no path provided")
 	}
-	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "windows":
-		cmd = exec.Command("cmd", "/C", "explorer", path)
+		return proc.Start("shell:open-path", "", "explorer.exe", path)
 	case "darwin":
-		cmd = exec.Command("open", path)
+		return proc.Start("shell:open-path", "", "open", path)
 	default:
-		cmd = exec.Command("xdg-open", path)
+		return proc.Start("shell:open-path", "", "xdg-open", path)
 	}
-	if err := cmd.Start(); err != nil {
-		a.logError("shell:open-path", err.Error())
-		return err
-	}
-	return nil
 }
 
 // ---------- skills ----------

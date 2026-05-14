@@ -2,14 +2,12 @@ package clidetector
 
 import (
 	"os/exec"
-	"runtime"
-	"strings"
 
 	"skill-sync-manager/internal/models"
 )
 
 // DetectCliTools 检查 PATH 中是否存在各个 CLI agent。
-// Windows 下使用 `where`，其他系统使用 `which`。
+// 直接使用 exec.LookPath，避免为了探测再拉起额外 shell 进程。
 // 返回列表与 models.AllTools() 一一对应（claude、codex、gemini、opencode、hermes）。
 func DetectCliTools() []models.ToolStatus {
 	tools := models.AllTools()
@@ -32,19 +30,9 @@ func DetectCliTools() []models.ToolStatus {
 }
 
 func locateExecutable(tool string) string {
-	lookup := "which"
-	if runtime.GOOS == "windows" {
-		lookup = "where"
-	}
-	out, err := exec.Command(lookup, tool).CombinedOutput()
+	out, err := exec.LookPath(tool)
 	if err != nil {
 		return ""
 	}
-	for _, line := range strings.Split(strings.ReplaceAll(string(out), "\r\n", "\n"), "\n") {
-		line = strings.TrimSpace(line)
-		if line != "" {
-			return line
-		}
-	}
-	return ""
+	return out
 }

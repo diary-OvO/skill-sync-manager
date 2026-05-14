@@ -3,10 +3,11 @@ package symlinkwindows
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"skill-sync-manager/internal/proc"
 )
 
 // windowsJunctionHint 在创建 junction 失败时附加给用户，给出常见的排查思路。
@@ -121,12 +122,11 @@ func CreateDirectoryJunction(linkPath string, targetPath string) error {
 		return fmt.Errorf("failed to create parent directory for link: %v", err)
 	}
 
-	cmd := exec.Command("cmd", "/C", "mklink", "/J", absLink, absTarget)
-	out, err := cmd.CombinedOutput()
+	out, err := proc.RunCombined("proc:mklink", "", "cmd", "/C", "mklink", "/J", absLink, absTarget)
 	if err != nil {
 		return fmt.Errorf(
 			"failed to create junction %s -> %s. %s Output: %s. %s",
-			absLink, absTarget, err.Error(), strings.TrimSpace(string(out)), windowsJunctionHint,
+			absLink, absTarget, err.Error(), strings.TrimSpace(out), windowsJunctionHint,
 		)
 	}
 	// 再校验一次 mklink 的输出：确实生成了链接才返回成功。

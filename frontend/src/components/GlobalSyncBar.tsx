@@ -96,11 +96,10 @@ export function GlobalSyncBar({
           const tooltip = `${label} · ${stateLabel}\n${hint}`;
           const ariaLabel = `${label}: ${stateLabel}. ${hint}`;
 
-          // partial 圆环：用 conic-gradient 精确画 synced/total 扇形。
-          const ringStyle =
+          const progressStyle =
             agg.state === "partial"
               ? ({
-                  ["--ring-ratio" as string]: `${(syncedN / total) * 360}deg`,
+                  ["--sync-progress" as string]: `${(syncedN / total) * 100}%`,
                 } as React.CSSProperties)
               : undefined;
 
@@ -115,7 +114,7 @@ export function GlobalSyncBar({
               disabled={disabled}
               title={tooltip}
               className={`tool-toggle tool-toggle--lg tool-toggle--${agg.state}`}
-              style={{ ["--tool-accent" as string]: accent, ...ringStyle }}
+              style={{ ["--tool-accent" as string]: accent, ...progressStyle }}
               onClick={(e) => handleClick(tool, agg, e)}
             >
               <Logo className="tool-toggle-icon" width={18} height={18} />

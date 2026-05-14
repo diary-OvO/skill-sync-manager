@@ -5,24 +5,21 @@ import (
 	"strings"
 
 	"skill-sync-manager/internal/models"
+	"skill-sync-manager/internal/proc"
 )
 
 func runGit(args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
-	out, err := cmd.CombinedOutput()
+	out, err := proc.RunCombined("proc:git", "", "git", args...)
 	if err != nil {
-		return string(out), err
+		return out, err
 	}
-	return string(out), nil
+	return out, nil
 }
 
 // IsGitAvailable 判断本机是否能正常调用 `git --version`。
 func IsGitAvailable() bool {
-	out, err := runGit("--version")
-	if err != nil {
-		return false
-	}
-	return strings.Contains(strings.ToLower(out), "git")
+	_, err := exec.LookPath("git")
+	return err == nil
 }
 
 // GetGitStatus 针对 root 运行一系列只读的 git 命令，返回稳定的结构体。
