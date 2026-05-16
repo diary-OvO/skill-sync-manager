@@ -18,6 +18,15 @@ export type PendingSet = ReadonlySet<string>;
 
 const pendingKey = (path: string, tool: ToolName) => `${path}::${tool}`;
 
+function isDownloadedSourceForTool(skill: SkillInfo, status: SyncStatus | undefined): boolean {
+  if (skill.origin !== "vendored" || !skill.importedFrom || !status?.targetPath) return false;
+  return normalizePath(skill.importedFrom) === normalizePath(status.targetPath);
+}
+
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+}
+
 export interface UseSyncActionsDeps {
   skills: SkillInfo[];
   syncStatus: SyncStatusMap;
@@ -166,7 +175,10 @@ export function useSyncActions({
   const bulkUnlink = useCallback<UseSyncActions["bulkUnlink"]>(
     async (tool) => {
       const targets = skills.filter((s) => s.valid && !s.hidden && !s.frozen);
-      const synced = targets.filter((s) => syncStatus[s.path]?.[tool]?.state === "synced");
+      const synced = targets.filter((s) => {
+        const status = syncStatus[s.path]?.[tool];
+        return status?.state === "synced" && !isDownloadedSourceForTool(s, status);
+      });
       if (synced.length === 0) {
         toast.push({
           kind: "info",

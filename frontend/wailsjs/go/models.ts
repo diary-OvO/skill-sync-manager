@@ -4,6 +4,7 @@ export namespace main {
 	    hidden?: boolean;
 	    frozen?: boolean;
 	    origin?: string;
+	    gitIgnored?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new SkillMetadataPatch(source);
@@ -14,6 +15,7 @@ export namespace main {
 	        this.hidden = source["hidden"];
 	        this.frozen = source["frozen"];
 	        this.origin = source["origin"];
+	        this.gitIgnored = source["gitIgnored"];
 	    }
 	}
 
@@ -136,6 +138,7 @@ export namespace models {
 	    origin: string;
 	    hidden: boolean;
 	    frozen: boolean;
+	    gitIgnored: boolean;
 	    importedFrom?: string;
 	    importedAtUnix?: number;
 	
@@ -155,6 +158,7 @@ export namespace models {
 	        this.origin = source["origin"];
 	        this.hidden = source["hidden"];
 	        this.frozen = source["frozen"];
+	        this.gitIgnored = source["gitIgnored"];
 	        this.importedFrom = source["importedFrom"];
 	        this.importedAtUnix = source["importedAtUnix"];
 	    }
@@ -266,6 +270,7 @@ export namespace registry {
 	    origin?: string;
 	    hidden?: boolean;
 	    frozen?: boolean;
+	    gitIgnored?: boolean;
 	    importedFrom?: string;
 	    importedAtUnix?: number;
 	
@@ -278,6 +283,7 @@ export namespace registry {
 	        this.origin = source["origin"];
 	        this.hidden = source["hidden"];
 	        this.frozen = source["frozen"];
+	        this.gitIgnored = source["gitIgnored"];
 	        this.importedFrom = source["importedFrom"];
 	        this.importedAtUnix = source["importedAtUnix"];
 	    }

@@ -8,7 +8,7 @@ interface Props {
   syncStatus?: Partial<Record<ToolName, SyncStatus>>;
   onChangeMetadata: (
     skill: SkillInfo,
-    patch: { hidden?: boolean; frozen?: boolean; origin?: SkillOrigin },
+    patch: { hidden?: boolean; frozen?: boolean; origin?: SkillOrigin; gitIgnored?: boolean },
   ) => void;
 }
 
@@ -73,7 +73,7 @@ export function SkillDetail({ skill, syncStatus, onChangeMetadata }: Props) {
         </div>
       </Field>
 
-      <Field label={`${t("skill.hidden")} / ${t("skill.frozen")}`}>
+      <Field label={`${t("skill.hidden")} / ${t("skill.frozen")} / ${t("table.git")}`}>
         <div className="metadata-toggles">
           <label className="toggle">
             <input
@@ -90,6 +90,14 @@ export function SkillDetail({ skill, syncStatus, onChangeMetadata }: Props) {
               onChange={(e) => onChangeMetadata(skill, { frozen: e.target.checked })}
             />
             <span>{t("skill.frozen")}</span>
+          </label>
+          <label className="toggle">
+            <input
+              type="checkbox"
+              checked={!skill.gitIgnored}
+              onChange={(e) => onChangeMetadata(skill, { gitIgnored: !e.target.checked })}
+            />
+            <span>{t("skill.gitTracked")}</span>
           </label>
         </div>
       </Field>
@@ -118,6 +126,11 @@ export function SkillDetail({ skill, syncStatus, onChangeMetadata }: Props) {
       {skill.hidden && (
         <div className="full">
           <div className="banner banner-info">{t("skill.hiddenNote")}</div>
+        </div>
+      )}
+      {skill.gitIgnored && (
+        <div className="full">
+          <div className="banner banner-info">{t("skill.gitIgnoredNote")}</div>
         </div>
       )}
 

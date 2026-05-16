@@ -86,9 +86,9 @@ export const wailsApi = {
     origin: SkillOrigin,
   ): Promise<SkillInfo> =>
     bridge(ImportSkillFromCli(toolName, cliSkillName, sharedRoot, origin)),
-  // migrateCliSkillToShared 与 importSkillFromCli 的区别：后者只复制，
-  // 前者还会把 CLI 原目录替换成 junction —— 从此不再有 shadowing。
-  // origin 固定 owned，所以没有 origin 入参。
+  // migrateCliSkillToShared 会把 CLI 原目录迁移进共享根并替换为 junction；
+  // importSkillFromCli 则按 origin 决定：owned 复制，vendored 在共享根建立
+  // 指回 CLI 原目录的 junction。
   migrateCliSkillToShared: (
     toolName: SupportedTool,
     cliSkillName: string,

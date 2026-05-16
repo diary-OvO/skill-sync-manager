@@ -12,16 +12,18 @@ interface Props {
   onSelect: (path: string) => void;
   onSync: (skill: SkillInfo, tool: ToolName) => void;
   onUnlink: (skill: SkillInfo, tool: ToolName) => void;
+  onToggleGitIgnored: (skill: SkillInfo, gitIgnored: boolean) => void;
   showHidden: boolean;
   onToggleShowHidden: (v: boolean) => void;
 }
 
-type ColumnKey = "name" | "description" | "origin" | "valid" | "tools" | "path";
+type ColumnKey = "name" | "description" | "origin" | "git" | "valid" | "tools" | "path";
 
 const DEFAULT_WIDTHS: ColumnWidths = {
   name: 180,
   description: 320,
   origin: 92,
+  git: 72,
   valid: 78,
   tools: 200,
   path: 240,
@@ -31,6 +33,7 @@ const COLUMN_ORDER: ColumnKey[] = [
   "name",
   "description",
   "origin",
+  "git",
   "valid",
   "tools",
   "path",
@@ -44,6 +47,7 @@ export function SkillTable({
   onSelect,
   onSync,
   onUnlink,
+  onToggleGitIgnored,
   showHidden,
   onToggleShowHidden,
 }: Props) {
@@ -62,6 +66,7 @@ export function SkillTable({
     name: t("table.name"),
     description: t("table.description"),
     origin: t("skill.origin"),
+    git: t("table.git"),
     valid: t("table.valid"),
     tools: t("table.tools"),
     path: t("table.path"),
@@ -175,6 +180,25 @@ export function SkillTable({
                         <span className={`badge origin-${originKey}`}>
                           {t(`origin.${originKey}`)}
                         </span>
+                      </td>
+                      <td className="cell-git">
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={!skill.gitIgnored}
+                          className={`git-toggle ${skill.gitIgnored ? "git-toggle--ignored" : "git-toggle--tracked"}`}
+                          title={
+                            skill.gitIgnored
+                              ? t("skill.gitIgnoredNote")
+                              : t("skill.gitTrackedNote")
+                          }
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onToggleGitIgnored(skill, !skill.gitIgnored);
+                          }}
+                        >
+                          Git
+                        </button>
                       </td>
                       <td className="cell-badge">
                         <span className={`badge ${skill.valid ? "ok" : "invalid"}`}>

@@ -3,13 +3,20 @@ package skillscanner
 import (
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
 	"skill-sync-manager/internal/models"
 	"skill-sync-manager/internal/registry"
+	"skill-sync-manager/internal/symlinkwindows"
 )
 
 func TestImportFromCliMarksVendored(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("vendored CLI imports use Windows junctions")
+	}
+
 	shared := t.TempDir()
 	fakeHome := t.TempDir()
 	t.Setenv("USERPROFILE", fakeHome)
@@ -52,6 +59,27 @@ func TestImportFromCliMarksVendored(t *testing.T) {
 	}
 	if e.Origin != models.SkillOriginVendored {
 		t.Errorf("registry origin wrong: %q", e.Origin)
+	}
+	if !e.GitIgnored {
+		t.Errorf("expected vendored import to be git ignored")
+	}
+
+	sharedLink := filepath.Join(shared, "downloaded-tool")
+	if !symlinkwindows.IsLinkPath(sharedLink) {
+		t.Fatalf("expected shared root entry to be a junction: %s", sharedLink)
+	}
+	if resolved, err := symlinkwindows.ResolveRealPath(sharedLink); err != nil {
+		t.Fatalf("resolve shared junction: %v", err)
+	} else if resolved != cliSkill {
+		t.Errorf("expected shared junction to point to %q, got %q", cliSkill, resolved)
+	}
+
+	gitignore, err := os.ReadFile(filepath.Join(shared, ".gitignore"))
+	if err != nil {
+		t.Fatalf("read .gitignore: %v", err)
+	}
+	if string(gitignore) == "" || !containsLine(string(gitignore), "/downloaded-tool/") {
+		t.Errorf("expected .gitignore to contain /downloaded-tool/, got:\n%s", string(gitignore))
 	}
 
 	// CLI-side copy must be untouched — never modified by ImportFromCli.
@@ -97,6 +125,10 @@ func TestImportFromCliRefusesDuplicate(t *testing.T) {
 }
 
 func TestImportFromCliEmptyOriginFallsBackToVendored(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("vendored CLI imports use Windows junctions")
+	}
+
 	shared := t.TempDir()
 	fakeHome := t.TempDir()
 	t.Setenv("USERPROFILE", fakeHome)
@@ -120,4 +152,13 @@ func TestImportFromCliEmptyOriginFallsBackToVendored(t *testing.T) {
 	if skill.Origin != models.SkillOriginVendored {
 		t.Errorf("expected fallback origin=vendored, got %q", skill.Origin)
 	}
+}
+
+func containsLine(text string, want string) bool {
+	for _, line := range strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n") {
+		if line == want {
+			return true
+		}
+	}
+	return false
 }

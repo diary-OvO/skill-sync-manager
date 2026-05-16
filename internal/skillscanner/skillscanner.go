@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"skill-sync-manager/internal/gitignore"
 	"skill-sync-manager/internal/models"
 	"skill-sync-manager/internal/registry"
 	"skill-sync-manager/internal/symlinkwindows"
@@ -147,10 +148,13 @@ func ScanSkills(root string) ([]models.SkillInfo, error) {
 	results := make([]models.SkillInfo, 0, len(entries))
 	seen := map[string]bool{}
 	for _, entry := range entries {
-		if !entry.IsDir() || entry.Name() == registry.DirName {
+		if entry.Name() == registry.DirName {
 			continue
 		}
 		skillDir := filepath.Join(root, entry.Name())
+		if st, err := os.Stat(skillDir); err != nil || !st.IsDir() {
+			continue
+		}
 		skillMd := filepath.Join(skillDir, "SKILL.md")
 		st, err := os.Stat(skillMd)
 		if err != nil || st.IsDir() {
@@ -197,6 +201,7 @@ func ScanSkills(root string) ([]models.SkillInfo, error) {
 			Origin:         regEntry.Origin,
 			Hidden:         regEntry.Hidden,
 			Frozen:         regEntry.Frozen,
+			GitIgnored:     regEntry.GitIgnored || gitignore.IsSkillIgnored(root, displayName),
 			ImportedFrom:   regEntry.ImportedFrom,
 			ImportedAtUnix: regEntry.ImportedAtUnix,
 		})
@@ -324,8 +329,9 @@ func copyFile(src, dest string) error {
 }
 
 // ImportFromCli 把某个 CLI 工具（例如 Claude / Codex / Gemini / OpenCode）skills 目录下
-// 已经存在的真实 skill 目录复制进共享根，并在注册表中记录其来源。
-// CLI 原始目录不会被动到，是否删除并改用 junction 由调用方决定。
+// 已经存在的真实 skill 纳入共享根，并在注册表中记录其来源。
+// owned 会复制进共享根；vendored 会在共享根创建 junction 指向 CLI 原始目录，
+// 让下载来源继续作为事实源。
 //
 // `origin` 必须为 "owned" 或 "vendored"；其它值都会被规范为 "vendored"
 // ——CLI 目录中原本存在的 skill 更可能是从外部引入的。
@@ -379,10 +385,6 @@ func ImportFromCli(toolName string, cliSkillName string, sharedRoot string, orig
 		return zero, err
 	}
 
-	if err := copyDirectory(source, targetDir); err != nil {
-		return zero, fmt.Errorf("failed to copy skill: %v", err)
-	}
-
 	// 规范化 origin。空值或未知值统一视为 vendored，因为这个 skill 来自共享根之外。
 	switch origin {
 	case models.SkillOriginOwned, models.SkillOriginVendored:
@@ -391,9 +393,26 @@ func ImportFromCli(toolName string, cliSkillName string, sharedRoot string, orig
 		origin = models.SkillOriginVendored
 	}
 
+	if origin == models.SkillOriginVendored {
+		if !symlinkwindows.IsWindows() {
+			return zero, fmt.Errorf("vendored CLI imports use Windows directory junctions")
+		}
+		if err := symlinkwindows.CreateDirectoryJunction(targetDir, source); err != nil {
+			return zero, fmt.Errorf("failed to link vendored skill into shared root: %v", err)
+		}
+		if err := gitignore.SetSkillIgnored(sharedRoot, targetName, true); err != nil {
+			return zero, fmt.Errorf("vendored skill linked but .gitignore update failed: %v", err)
+		}
+	} else {
+		if err := copyDirectory(source, targetDir); err != nil {
+			return zero, fmt.Errorf("failed to copy skill: %v", err)
+		}
+	}
+
 	reg, _ := registry.Load(sharedRoot)
 	reg.Set(targetName, registry.Entry{
 		Origin:         origin,
+		GitIgnored:     origin == models.SkillOriginVendored,
 		ImportedFrom:   source,
 		ImportedAtUnix: time.Now().Unix(),
 	})

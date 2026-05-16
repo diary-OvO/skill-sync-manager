@@ -15,6 +15,10 @@ const messages: Record<Lang, MessageTree> = {
     },
     root: {
       label: "Shared Skill Root",
+      toolbarLabel: "Workspace controls",
+      headerHint: "One shared skills root, synced into every CLI.",
+      quickActions: "Workspace",
+      rescanTools: "CLI check",
       placeholder: "e.g. D:\\AgentSkills",
       browse: "Browse",
       scan: "Scan",
@@ -23,6 +27,33 @@ const messages: Record<Lang, MessageTree> = {
       noRootAlert: "Please select a shared skill root first.",
       refreshSync: "Refresh Sync",
       rescanTool: "Rescan {tool}",
+    },
+    dashboard: {
+      label: "Workspace overview",
+      eyebrow: "Sync cockpit",
+      flowLabel: "Setup progress",
+      status: {
+        noRoot: "Choose a shared root to start.",
+        readyToScan: "Root selected. Scan to load skills.",
+        scanning: "Scanning root, Git status and CLI targets.",
+        conflicts: "{count} conflict(s) need inspection.",
+        ready: "{count} skill(s) are ready for batch sync.",
+      },
+      step: {
+        root: "Choose root",
+        scan: "Scan skills",
+        sync: "Sync targets",
+      },
+      metrics: {
+        skills: "Skills",
+        visible: "{count} visible",
+        batchable: "Batch-ready",
+        invalid: "{count} invalid",
+        synced: "Synced links",
+        conflicts: "{count} conflicts",
+        tools: "Tools",
+        toolsNote: "detected",
+      },
     },
     update: {
       check: "Check Updates",
@@ -89,6 +120,7 @@ const messages: Record<Lang, MessageTree> = {
       name: "Name",
       description: "Description",
       valid: "Valid",
+      git: "Git",
       tools: "Sync",
       path: "Path",
       noDescription: "(no description)",
@@ -120,6 +152,7 @@ const messages: Record<Lang, MessageTree> = {
     toggle: {
       state: {
         synced: "synced",
+        source: "source",
         missing: "not synced",
         conflict: "conflict",
         invalid: "skill invalid",
@@ -128,6 +161,7 @@ const messages: Record<Lang, MessageTree> = {
       action: {
         syncHint: "Click to sync to {tool}.",
         unlinkHint: "Click to unlink from {tool}.",
+        sourceHint: "{tool} is the downloaded source; it stays as a real folder.",
         conflictHint: "{tool} has a conflict — rescan or resolve manually.",
         unsupportedHint: "Syncing to {tool} is not available yet.",
         invalidHint: "Skill has errors; fix them first.",
@@ -183,7 +217,7 @@ const messages: Record<Lang, MessageTree> = {
         external: "external",
       },
       kindHelp: {
-        managed: "Junction points back to the matching skill in the shared root.",
+        managed: "Either a junction points to the shared root, or this CLI folder is the downloaded source referenced by the shared root.",
         "stray-link":
           "Junction, but it points somewhere that is not the shared root skill. Safe to unlink.",
         shadowing:
@@ -194,7 +228,7 @@ const messages: Record<Lang, MessageTree> = {
       action: {
         unlink: "Unlink",
         importOwned: "Migrate as owned",
-        importVendored: "Import as vendored",
+        importVendored: "Link as downloaded",
         open: "Open folder",
         ignore: "Ignore",
         ignoreTitle: "Never show this folder again",
@@ -220,6 +254,9 @@ const messages: Record<Lang, MessageTree> = {
       showHidden: "Show hidden",
       frozenNote: "Frozen — excluded from Sync All. Unfreeze to include in batches.",
       hiddenNote: "Hidden — excluded from the default list and batch sync.",
+      gitTracked: "Git tracked",
+      gitTrackedNote: "Included in the shared root Git history.",
+      gitIgnoredNote: "Ignored by .gitignore; useful for downloaded CLI skills.",
       batchSkippedFrozen: "Skipped {name}: frozen.",
       batchSkippedHidden: "Skipped {name}: hidden.",
     },
@@ -238,6 +275,10 @@ const messages: Record<Lang, MessageTree> = {
     },
     root: {
       label: "共享 Skill 根目录",
+      toolbarLabel: "工作区控制",
+      headerHint: "一份共享 Skill 根目录，同步到多个 CLI。",
+      quickActions: "工作区",
+      rescanTools: "CLI 检查",
       placeholder: "例如 D:\\AgentSkills",
       browse: "浏览",
       scan: "扫描",
@@ -246,6 +287,33 @@ const messages: Record<Lang, MessageTree> = {
       noRootAlert: "请先选择共享 Skill 根目录。",
       refreshSync: "刷新同步状态",
       rescanTool: "重新扫描 {tool}",
+    },
+    dashboard: {
+      label: "工作区概览",
+      eyebrow: "同步控制台",
+      flowLabel: "设置进度",
+      status: {
+        noRoot: "选择共享根目录后开始。",
+        readyToScan: "目录已选择，请扫描 Skill。",
+        scanning: "正在扫描目录、Git 状态和 CLI 目标。",
+        conflicts: "{count} 个冲突需要检查。",
+        ready: "{count} 个 Skill 可批量同步。",
+      },
+      step: {
+        root: "选择目录",
+        scan: "扫描 Skill",
+        sync: "同步目标",
+      },
+      metrics: {
+        skills: "Skill",
+        visible: "{count} 个可见",
+        batchable: "可批量同步",
+        invalid: "{count} 个无效",
+        synced: "已同步链接",
+        conflicts: "{count} 个冲突",
+        tools: "工具",
+        toolsNote: "已检测",
+      },
     },
     update: {
       check: "检查更新",
@@ -312,6 +380,7 @@ const messages: Record<Lang, MessageTree> = {
       name: "名称",
       description: "描述",
       valid: "有效",
+      git: "Git",
       tools: "同步",
       path: "路径",
       noDescription: "（无描述）",
@@ -343,6 +412,7 @@ const messages: Record<Lang, MessageTree> = {
     toggle: {
       state: {
         synced: "已同步",
+        source: "来源",
         missing: "未同步",
         conflict: "冲突",
         invalid: "Skill 无效",
@@ -351,6 +421,7 @@ const messages: Record<Lang, MessageTree> = {
       action: {
         syncHint: "点击同步到 {tool}。",
         unlinkHint: "点击取消 {tool} 链接。",
+        sourceHint: "{tool} 是下载来源，会保留为真实目录。",
         conflictHint: "{tool} 有冲突 —— 请重新扫描或手动解决。",
         unsupportedHint: "{tool} 同步暂未支持。",
         invalidHint: "Skill 存在错误，请先修复。",
@@ -406,7 +477,7 @@ const messages: Record<Lang, MessageTree> = {
         external: "外来",
       },
       kindHelp: {
-        managed: "链接指向共享根里对应的 skill，状态正常。",
+        managed: "链接指向共享根，或这个 CLI 目录是共享根引用的下载来源，状态正常。",
         "stray-link": "是链接，但指向的并不是共享根里的 skill。可以安全解除。",
         shadowing:
           "本地是真实目录，共享根里有同名 skill。这是 conflict 的典型原因——迁移其中一侧或解除。",
@@ -415,7 +486,7 @@ const messages: Record<Lang, MessageTree> = {
       action: {
         unlink: "解除链接",
         importOwned: "迁移为 自建",
-        importVendored: "导入为 下载",
+        importVendored: "链接为 下载",
         open: "打开目录",
         ignore: "忽略此项",
         ignoreTitle: "永久忽略这个目录，后续扫描不再出现",
@@ -441,6 +512,9 @@ const messages: Record<Lang, MessageTree> = {
       showHidden: "显示隐藏",
       frozenNote: "已冻结——批量同步时跳过。解冻后才会加入批量操作。",
       hiddenNote: "已隐藏——默认列表和批量同步都会跳过。",
+      gitTracked: "参与 Git",
+      gitTrackedNote: "会进入共享根目录的 Git 历史。",
+      gitIgnoredNote: "已写入 .gitignore，适合由 CLI 下载的 Skill。",
       batchSkippedFrozen: "已跳过 {name}：已冻结。",
       batchSkippedHidden: "已跳过 {name}：已隐藏。",
     },

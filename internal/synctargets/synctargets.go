@@ -128,6 +128,11 @@ func CheckSyncStatus(skill models.SkillInfo, toolName string) (models.SyncStatus
 
 	isLink := symlinkwindows.IsLinkPath(targetPath)
 	if !isLink {
+		if isVendoredSourceTarget(skill, targetPath) {
+			base.State = models.SyncStateSynced
+			base.Message = fmt.Sprintf("Using original downloaded source at %s", targetPath)
+			return base, nil
+		}
 		base.State = models.SyncStateConflict
 		base.Message = fmt.Sprintf(
 			"A real directory (not a junction) already exists at %s.", targetPath,
@@ -147,7 +152,8 @@ func CheckSyncStatus(skill models.SkillInfo, toolName string) (models.SyncStatus
 		absSkill = skill.Path
 	}
 
-	if strings.EqualFold(filepath.Clean(resolved), filepath.Clean(absSkill)) {
+	if strings.EqualFold(filepath.Clean(resolved), filepath.Clean(absSkill)) ||
+		isVendoredSourceTarget(skill, resolved) {
 		base.State = models.SyncStateSynced
 		base.Message = fmt.Sprintf("Junction points to %s", resolved)
 		return base, nil
@@ -156,6 +162,27 @@ func CheckSyncStatus(skill models.SkillInfo, toolName string) (models.SyncStatus
 	base.State = models.SyncStateConflict
 	base.Message = fmt.Sprintf("Existing junction points elsewhere: %s", resolved)
 	return base, nil
+}
+
+func isVendoredSourceTarget(skill models.SkillInfo, targetPath string) bool {
+	if skill.Origin != models.SkillOriginVendored || skill.ImportedFrom == "" {
+		return false
+	}
+	return samePath(skill.ImportedFrom, targetPath)
+}
+
+func samePath(a, b string) bool {
+	ra, errA := symlinkwindows.ResolveRealPath(a)
+	rb, errB := symlinkwindows.ResolveRealPath(b)
+	if errA == nil && errB == nil {
+		return strings.EqualFold(filepath.Clean(ra), filepath.Clean(rb))
+	}
+	absA, errA := filepath.Abs(a)
+	absB, errB := filepath.Abs(b)
+	if errA != nil || errB != nil {
+		return strings.EqualFold(filepath.Clean(a), filepath.Clean(b))
+	}
+	return strings.EqualFold(filepath.Clean(absA), filepath.Clean(absB))
 }
 
 func joinErrors(errs []string) string {

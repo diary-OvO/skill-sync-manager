@@ -409,11 +409,20 @@ function AppInner() {
     logLocal("scan.cancel", "info", "User cancelled the scan. Ongoing backend work will finish but its results will be discarded.");
   }, []);
 
+  function handleRootInputChange(nextRoot: string): void {
+    setSharedRoot(nextRoot);
+    setSkills([]);
+    setSelectedSkillPath(null);
+    setSyncStatus({});
+    setGitStatus(null);
+    setInspector(createInspectorState());
+  }
+
   async function handleBrowseRoot(): Promise<void> {
     try {
       const picked = await api.selectRootFolder();
       if (!picked) return;
-      setSharedRoot(picked);
+      handleRootInputChange(picked);
       await api.saveSettings({ sharedRoot: picked });
       await runScanFlow(picked);
     } catch (err) {
@@ -522,7 +531,7 @@ function AppInner() {
 
   async function handleChangeMetadata(
     skill: SkillInfo,
-    patch: { hidden?: boolean; frozen?: boolean; origin?: SkillOrigin },
+    patch: { hidden?: boolean; frozen?: boolean; origin?: SkillOrigin; gitIgnored?: boolean },
   ): Promise<void> {
     if (!sharedRoot) return;
     try {
@@ -534,11 +543,15 @@ function AppInner() {
                 ...s,
                 hidden: entry.hidden ?? s.hidden,
                 frozen: entry.frozen ?? s.frozen,
+                gitIgnored: entry.gitIgnored ?? s.gitIgnored,
                 origin: (entry.origin as SkillOrigin) || s.origin,
               }
             : s,
         ),
       );
+      if (patch.gitIgnored !== undefined) {
+        void refreshGitStatus();
+      }
     } catch (err) {
       window.alert((err as Error).message);
     }
@@ -601,9 +614,9 @@ function AppInner() {
       return;
     }
 
-    // vendored 仍走"只复制"语义：第三方 skill 的"权威副本"留在 CLI 那边，
-    // 共享根这份只是被记录的 vendored 引用。继续会产生 shadowing，
-    // 但这是符合预期的 —— 用户对外部 skill 不打算改。
+    // vendored 走"下载来源保留为事实源"语义：共享根只创建 junction 指向
+    // 原 CLI 目录，并默认写入 .gitignore。后续同步到其它 CLI 时，
+    // 其它 CLI 再链接到共享根里的这条引用。
     try {
       const skill = await api.importSkillFromCli(
         entry.toolName as SupportedTool,
@@ -631,6 +644,52 @@ function AppInner() {
   const selectedSkill = skills.find((s) => s.path === selectedSkillPath) ?? null;
   const selectedSyncStatus = selectedSkill ? syncStatus[selectedSkill.path] : undefined;
   const hasAnyInspectorEntries = SUPPORTED_TOOLS.some((tool) => inspector[tool].length > 0);
+  const visibleSkillCount = skills.filter((skill) => !skill.hidden).length;
+  const batchableSkillCount = skills.filter(
+    (skill) => skill.valid && !skill.hidden && !skill.frozen,
+  ).length;
+  const invalidSkillCount = skills.filter((skill) => !skill.valid).length;
+  const detectedToolCount = tools.filter((tool) => tool.detected && tool.supported).length;
+  const syncSummary = skills.reduce(
+    (acc, skill) => {
+      for (const tool of SUPPORTED_TOOLS) {
+        const state = syncStatus[skill.path]?.[tool]?.state;
+        if (state === "synced") acc.synced += 1;
+        if (state === "conflict") acc.conflicts += 1;
+      }
+      return acc;
+    },
+    { synced: 0, conflicts: 0 },
+  );
+  const dashboardStatus = busy
+    ? t("dashboard.status.scanning")
+    : !sharedRoot
+      ? t("dashboard.status.noRoot")
+      : skills.length === 0
+        ? t("dashboard.status.readyToScan")
+        : syncSummary.conflicts > 0
+          ? t("dashboard.status.conflicts", { count: String(syncSummary.conflicts) })
+          : t("dashboard.status.ready", { count: String(batchableSkillCount) });
+  const workflowSteps = [
+    {
+      key: "root",
+      label: t("dashboard.step.root"),
+      done: Boolean(sharedRoot),
+      active: !sharedRoot,
+    },
+    {
+      key: "scan",
+      label: t("dashboard.step.scan"),
+      done: skills.length > 0,
+      active: Boolean(sharedRoot) && skills.length === 0,
+    },
+    {
+      key: "sync",
+      label: t("dashboard.step.sync"),
+      done: syncSummary.synced > 0,
+      active: skills.length > 0 && syncSummary.synced === 0,
+    },
+  ];
 
   const split = useVerticalSplit("ssm.split.tableHeight.v1", {
     defaultTop: 280,
@@ -665,7 +724,7 @@ function AppInner() {
     <div className="app">
       <RootSelector
         value={sharedRoot}
-        onChange={setSharedRoot}
+        onChange={handleRootInputChange}
         onBrowse={handleBrowseRoot}
         onScan={handleScan}
         onImport={handleImport}
@@ -682,6 +741,58 @@ function AppInner() {
       <div className="main-grid">
         <div className="sidebar">
           {platformWarning ? <div className="banner">{t("app.platformWarning")}</div> : null}
+          <section className="workspace-dashboard" aria-label={t("dashboard.label")}>
+            <div className="workspace-dashboard-copy">
+              <span className="dashboard-eyebrow">{t("dashboard.eyebrow")}</span>
+              <strong className="dashboard-status-line">{dashboardStatus}</strong>
+            </div>
+            <div className="workflow-rail" aria-label={t("dashboard.flowLabel")}>
+              {workflowSteps.map((step, index) => (
+                <div
+                  key={step.key}
+                  className={`workflow-step ${step.done ? "done" : ""} ${step.active ? "active" : ""}`}
+                >
+                  <span className="workflow-step-index">{index + 1}</span>
+                  <span className="workflow-step-label">{step.label}</span>
+                </div>
+              ))}
+            </div>
+            <div className="dashboard-metrics">
+              <div className="metric-card">
+                <span className="metric-label">{t("dashboard.metrics.skills")}</span>
+                <strong>{skills.length}</strong>
+                <span className="metric-note">
+                  {t("dashboard.metrics.visible", { count: String(visibleSkillCount) })}
+                </span>
+              </div>
+              <div className="metric-card">
+                <span className="metric-label">{t("dashboard.metrics.batchable")}</span>
+                <strong>{batchableSkillCount}</strong>
+                <span className="metric-note">
+                  {t("dashboard.metrics.invalid", { count: String(invalidSkillCount) })}
+                </span>
+              </div>
+              <div className="metric-card">
+                <span className="metric-label">{t("dashboard.metrics.synced")}</span>
+                <strong>{syncSummary.synced}</strong>
+                <span className="metric-note">
+                  {t("dashboard.metrics.conflicts", { count: String(syncSummary.conflicts) })}
+                </span>
+              </div>
+              <div className="metric-card">
+                <span className="metric-label">{t("dashboard.metrics.tools")}</span>
+                <strong>
+                  {detectedToolCount}/{SUPPORTED_TOOLS.length}
+                </strong>
+                <span className="metric-note">{t("dashboard.metrics.toolsNote")}</span>
+              </div>
+              <div className="metric-card metric-card-wide">
+                <span className="metric-label">{t("git.dirty")}</span>
+                <strong>{gitStatus ? (gitStatus.dirty ? t("git.yes") : t("git.no")) : "—"}</strong>
+                <span className="metric-note">{gitStatus?.branch ?? t("git.none")}</span>
+              </div>
+            </div>
+          </section>
           <GitStatusPanel status={gitStatus} />
           <ToolStatusPanel tools={tools} />
         </div>
@@ -703,14 +814,12 @@ function AppInner() {
             onCheckUpdate={() => checkForUpdate(true)}
           />
 
-          {skills.length > 0 ? (
-            <GlobalSyncBar
-              skills={skills}
-              syncStatus={syncStatus}
-              onBulkSync={onBulkSyncFromBar}
-              onBulkUnlink={onBulkUnlinkFromBar}
-            />
-          ) : null}
+          <GlobalSyncBar
+            skills={skills}
+            syncStatus={syncStatus}
+            onBulkSync={onBulkSyncFromBar}
+            onBulkUnlink={onBulkUnlinkFromBar}
+          />
 
           <div
             ref={split.containerRef}
@@ -725,6 +834,9 @@ function AppInner() {
                 onSelect={setSelectedSkillPath}
                 onSync={handleSyncOne}
                 onUnlink={onUnlinkFromTable}
+                onToggleGitIgnored={(skill, gitIgnored) =>
+                  void handleChangeMetadata(skill, { gitIgnored })
+                }
                 showHidden={showHidden}
                 onToggleShowHidden={setShowHidden}
               />

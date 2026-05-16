@@ -28,6 +28,7 @@ type Entry struct {
 	Origin         models.SkillOrigin `json:"origin,omitempty"`
 	Hidden         bool               `json:"hidden,omitempty"`
 	Frozen         bool               `json:"frozen,omitempty"`
+	GitIgnored     bool               `json:"gitIgnored,omitempty"`
 	ImportedFrom   string             `json:"importedFrom,omitempty"`
 	ImportedAtUnix int64              `json:"importedAtUnix,omitempty"`
 }

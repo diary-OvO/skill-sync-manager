@@ -6,7 +6,13 @@ import { useLanguage } from "../i18n";
 
 // 按钮的 6 种外观状态。busy 与语义状态并列：
 // 语义状态决定"下一次点击的动作"；busy 只影响视觉和禁用。
-export type ToggleState = "synced" | "missing" | "conflict" | "invalid" | "unsupported";
+export type ToggleState =
+  | "synced"
+  | "source"
+  | "missing"
+  | "conflict"
+  | "invalid"
+  | "unsupported";
 
 export interface ToggleStateInfo {
   state: ToggleState;
@@ -28,6 +34,9 @@ export function resolveToggleState(
   if (!syncStatus) return { state: "missing" };
   switch (syncStatus.state) {
     case "synced":
+      if (isDownloadedSource(skill, syncStatus.targetPath)) {
+        return { state: "source", targetPath: syncStatus.targetPath };
+      }
       return { state: "synced", targetPath: syncStatus.targetPath };
     case "conflict":
       return { state: "conflict", targetPath: syncStatus.targetPath, message: syncStatus.message };
@@ -40,6 +49,15 @@ export function resolveToggleState(
     default:
       return { state: "missing", targetPath: syncStatus.targetPath };
   }
+}
+
+function isDownloadedSource(skill: SkillInfo, targetPath?: string): boolean {
+  if (skill.origin !== "vendored" || !skill.importedFrom || !targetPath) return false;
+  return normalizePath(skill.importedFrom) === normalizePath(targetPath);
+}
+
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
 }
 
 export interface ToolToggleProps {
@@ -59,15 +77,18 @@ export function ToolToggle({ tool, info, busy, large, onSync, onUnlink }: ToolTo
   const accent = TOOL_ACCENT[tool];
 
   const { state } = info;
-  const disabled = state === "unsupported" || state === "invalid" || busy;
+  const hardDisabled = state === "unsupported" || state === "invalid" || busy;
+  const disabled = hardDisabled || state === "source";
   const ariaChecked: boolean | "mixed" =
-    state === "synced" ? true : state === "conflict" ? "mixed" : false;
+    state === "synced" || state === "source" ? true : state === "conflict" ? "mixed" : false;
 
   // tooltip：一行状态 + 一行动作提示。
   const stateLabel = t(`toggle.state.${state}`);
   const actionHint =
     state === "synced"
       ? t("toggle.action.unlinkHint", { tool: label })
+      : state === "source"
+        ? t("toggle.action.sourceHint", { tool: label })
       : state === "missing"
         ? t("toggle.action.syncHint", { tool: label })
         : state === "conflict"
@@ -95,7 +116,7 @@ export function ToolToggle({ tool, info, busy, large, onSync, onUnlink }: ToolTo
       aria-checked={ariaChecked}
       aria-label={ariaLabel}
       aria-disabled={disabled || undefined}
-      disabled={disabled}
+      disabled={hardDisabled}
       data-busy={busy ? "true" : undefined}
       title={tooltip}
       onClick={handleClick}

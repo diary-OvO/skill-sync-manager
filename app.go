@@ -11,6 +11,7 @@ import (
 
 	"skill-sync-manager/internal/clidetector"
 	"skill-sync-manager/internal/clitoolscanner"
+	"skill-sync-manager/internal/gitignore"
 	"skill-sync-manager/internal/gitstatus"
 	"skill-sync-manager/internal/models"
 	"skill-sync-manager/internal/proc"
@@ -414,8 +415,9 @@ func (a *App) UnlinkSkill(toolName string, skillName string) error {
 	return nil
 }
 
-// ImportSkillFromCli 将 CLI 工具目录下的真实 skill 复制进共享根，
-// 并在注册表中做好标记。origin 必须是 "owned" 或 "vendored"，
+// ImportSkillFromCli 将 CLI 工具目录下的真实 skill 纳入共享根。
+// owned 会复制进共享根；vendored 会在共享根创建 junction 指向原 CLI 目录，
+// 让下载来源继续作为事实源。origin 必须是 "owned" 或 "vendored"，
 // 其它值都会被规范化为 "vendored"。
 func (a *App) ImportSkillFromCli(toolName string, cliSkillName string, sharedRoot string, origin string) (models.SkillInfo, error) {
 	skill, err := skillscanner.ImportFromCli(toolName, cliSkillName, sharedRoot, models.SkillOrigin(origin))
@@ -454,9 +456,10 @@ func (a *App) MigrateCliSkillToShared(toolName string, cliSkillName string, shar
 // SkillMetadataPatch 是 SetSkillMetadata 的入参。
 // 任何指针字段为 nil 时表示不修改，这样前端可以只发送刚被切换的那一项。
 type SkillMetadataPatch struct {
-	Hidden *bool   `json:"hidden,omitempty"`
-	Frozen *bool   `json:"frozen,omitempty"`
-	Origin *string `json:"origin,omitempty"`
+	Hidden     *bool   `json:"hidden,omitempty"`
+	Frozen     *bool   `json:"frozen,omitempty"`
+	Origin     *string `json:"origin,omitempty"`
+	GitIgnored *bool   `json:"gitIgnored,omitempty"`
 }
 
 // SetSkillMetadata 更新注册表中某个 skill 的字段，返回合并后的条目。
@@ -485,6 +488,13 @@ func (a *App) SetSkillMetadata(sharedRoot string, skillName string, patch SkillM
 			v = models.SkillOriginOwned
 		}
 		current.Origin = v
+	}
+	if patch.GitIgnored != nil {
+		if err := gitignore.SetSkillIgnored(sharedRoot, skillName, *patch.GitIgnored); err != nil {
+			a.logError("registry:set", err.Error())
+			return registry.Entry{}, err
+		}
+		current.GitIgnored = *patch.GitIgnored
 	}
 	reg.Set(skillName, current)
 	if err := registry.Save(sharedRoot, reg); err != nil {

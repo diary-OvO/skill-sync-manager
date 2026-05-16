@@ -36,6 +36,7 @@ type SkillInfo struct {
 	Origin         SkillOrigin `json:"origin"`
 	Hidden         bool        `json:"hidden"`
 	Frozen         bool        `json:"frozen"`
+	GitIgnored     bool        `json:"gitIgnored"`
 	ImportedFrom   string      `json:"importedFrom,omitempty"`
 	ImportedAtUnix int64       `json:"importedAtUnix,omitempty"`
 }

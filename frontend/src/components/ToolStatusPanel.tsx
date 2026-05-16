@@ -7,9 +7,15 @@ interface Props {
 
 export function ToolStatusPanel({ tools }: Props) {
   const { t } = useLanguage();
+  const detected = tools.filter((tool) => tool.detected && tool.supported).length;
   return (
-    <div className="panel">
-      <div className="panel-header">{t("tools.title")}</div>
+    <details className="panel tool-status-panel">
+      <summary className="panel-header tool-status-summary">
+        <span>{t("tools.title")}</span>
+        <span className="tool-status-summary-meta">
+          {tools.length > 0 ? `${detected}/${tools.length}` : t("tools.detecting")}
+        </span>
+      </summary>
       <div className="panel-body">
         {tools.length === 0 ? (
           <div className="empty">{t("tools.detecting")}</div>
@@ -35,6 +41,6 @@ export function ToolStatusPanel({ tools }: Props) {
           </div>
         )}
       </div>
-    </div>
+    </details>
   );
 }

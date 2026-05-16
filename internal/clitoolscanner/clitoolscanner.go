@@ -95,9 +95,16 @@ func ScanCliSkills(toolName string, sharedRoot string) ([]models.CliSkillEntry, 
 				item.HasSkillMd = true
 			}
 			if sharedExists {
-				// 与共享根同名 —— shadowing 语义，即便它没有 SKILL.md
-				// 也要暴露给用户，方便处理遮蔽。
-				item.Kind = models.CliSkillKindShadowing
+				if resolvedShared, err := symlinkwindows.ResolveRealPath(sharedPath); err == nil &&
+					samePath(resolvedShared, full) {
+					// vendored/downloaded skill 的权威副本留在原 CLI 目录，
+					// 共享根只放 junction 指回来。此时 CLI 侧真实目录不是冲突。
+					item.Kind = models.CliSkillKindManaged
+				} else {
+					// 与共享根同名但不是共享根指回来的来源目录 —— shadowing 语义，
+					// 即便它没有 SKILL.md 也要暴露给用户，方便处理遮蔽。
+					item.Kind = models.CliSkillKindShadowing
+				}
 			} else if item.HasSkillMd {
 				// external 必须是一个"真的像 skill"的目录，
 				// 否则 .system、design、random-folder 这类都会被误报。
@@ -128,10 +135,10 @@ func listSharedRootSkills(sharedRoot string) map[string]string {
 		return m
 	}
 	for _, e := range entries {
-		if !e.IsDir() {
+		full := filepath.Join(sharedRoot, e.Name())
+		if st, err := os.Stat(full); err != nil || !st.IsDir() {
 			continue
 		}
-		full := filepath.Join(sharedRoot, e.Name())
 		skillMd := filepath.Join(full, "SKILL.md")
 		if st, err := os.Stat(skillMd); err == nil && !st.IsDir() {
 			m[e.Name()] = full

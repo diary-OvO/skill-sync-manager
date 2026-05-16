@@ -19,6 +19,7 @@ export interface SkillInfo {
   origin: SkillOrigin;
   hidden: boolean;
   frozen: boolean;
+  gitIgnored: boolean;
   importedFrom?: string;
   importedAtUnix?: number;
 }
@@ -112,6 +113,7 @@ export interface RegistryEntry {
   origin?: SkillOrigin;
   hidden?: boolean;
   frozen?: boolean;
+  gitIgnored?: boolean;
   importedFrom?: string;
   importedAtUnix?: number;
 }
@@ -125,6 +127,7 @@ export interface SkillMetadataPatch {
   hidden?: boolean;
   frozen?: boolean;
   origin?: SkillOrigin;
+  gitIgnored?: boolean;
 }
 
 export const SUPPORTED_TOOLS = ["claude", "codex", "gemini", "opencode"] as const;

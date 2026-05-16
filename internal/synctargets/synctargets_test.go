@@ -119,3 +119,34 @@ func TestConflictDoesNotOverwrite(t *testing.T) {
 		t.Fatalf("sentinel file was unexpectedly removed: %v", err)
 	}
 }
+
+func TestVendoredSourceRealDirectoryIsSynced(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("junction checks are Windows-only")
+	}
+
+	fakeHome := t.TempDir()
+	t.Setenv("USERPROFILE", fakeHome)
+	t.Setenv("HOME", fakeHome)
+
+	source := filepath.Join(fakeHome, ".claude", "skills", "downloaded")
+	if err := os.MkdirAll(source, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	skill := models.SkillInfo{
+		Name:         "downloaded",
+		Description:  "downloaded",
+		Path:         filepath.Join(t.TempDir(), "downloaded"),
+		Valid:        true,
+		Origin:       models.SkillOriginVendored,
+		ImportedFrom: source,
+	}
+
+	status, err := CheckSyncStatus(skill, "claude")
+	if err != nil {
+		t.Fatalf("CheckSyncStatus returned error: %v", err)
+	}
+	if status.State != models.SyncStateSynced {
+		t.Fatalf("expected vendored source to be synced, got %q: %s", status.State, status.Message)
+	}
+}
